@@ -1,0 +1,12 @@
+MANIFEST.in
+README.txt
+setup.cfg
+analysis_server/__init__.py
+analysis_server/server.py
+analysis_server.egg-info/PKG-INFO
+analysis_server.egg-info/SOURCES.txt
+analysis_server.egg-info/dependency_links.txt
+analysis_server.egg-info/entry_points.txt
+analysis_server.egg-info/pbr.json
+analysis_server.egg-info/requires.txt
+analysis_server.egg-info/top_level.txt
