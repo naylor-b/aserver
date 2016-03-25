@@ -53,8 +53,10 @@ from openmdao.util.shell_proc import ShellProc, STDOUT
 from openmdao.util.file_util import DirContext
 
 from analysis_server.stream  import Stream
+from analysis_server.wrkpool import WorkerPool
+from analysis_server.publickey import make_private
+from analysis_server.mp_util import read_allowed_hosts
 # from analysis_server.wrapper import ComponentWrapper, _find_var_wrapper
-# from analysis_server.wrkpool import WorkerPool
 # from analysis_server.filexfer import filexfer
 
 
@@ -754,8 +756,7 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
     if sys.platform != 'win32' or HAVE_PYWIN32:
         make_private('hosts.allow')
 
-    server_path = \
-        pkg_resources.resource_filename('analysis_server', 'server.py')
+    server_path = os.path.splitext(os.path.abspath(__file__))[0]+'.py'
 
     server_out = 'as-%d.out' % port
     server_up = 'as-%d.up' % port
