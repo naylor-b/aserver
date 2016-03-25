@@ -300,6 +300,33 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             if cleanup and os.path.exists(name):
                 shutil.rmtree(name)
 
+    # This will be exercised by client side tests.
+    def finish_request(self, request, client_address):  # pragma no cover
+        """
+        Overrides superclass to track active clients and cleanup
+        upon client disconnect.
+
+        request: string
+            Request message.
+
+        client_address: ``(host, port)``
+            Source of client request.
+        """
+        host, port = client_address
+        logging.info('Connection from %s:%s', host, port)
+        self._num_clients += 1
+        try:
+            SocketServer.TCPServer.finish_request(self, request, client_address)
+        finally:
+            logging.info('Disconnect %s:%s', host, port)
+            self._num_clients -= 1
+            with self.handlers as handlers:
+                try:  # It seems handler.finish() isn't called on disconnect...
+                    handlers[client_address].cleanup()
+                except Exception, exc:
+                    logging.warning('Exception during handler cleanup: %r', exc)
+
+
 class _Handler(SocketServer.BaseRequestHandler):
     """ Handles requests from a single client. """
 
@@ -531,10 +558,102 @@ Available Commands:
 
 
 
+    def _get_sys_info(self, args):
+        """
+        Retrieves information about the server and the system it is on.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getSysInfo')
+            return
+
+        with self.server.components as comps:
+            num_comps = len(comps)
+
+        self._send_reply("""\
+version: %s
+build: %s
+num clients: %d
+num components: %d
+os name: %s
+os arch: %s
+os version: %s
+python version: %s
+user name: %s"""
+             % (_AS_VERSION, _AS_BUILD, self.server.num_clients, num_comps,
+                platform.system(), platform.processor(),
+                platform.release(), platform.python_version(),
+                getpass.getuser()))
 
 
 
+    def _quit(self, args):
+        """
+        Close the connection.
 
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'quit')
+            return
+
+        self._logger.info('Client quit')
+
+
+
+    def _start(self, args):
+        """
+        Creates a new component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 2 or len(args) > 4:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'start <component> <instanceName> [connector] [queue]')
+            return
+
+        if len(args) > 2:
+            raise NotImplementedError('start, args > 2')
+
+        comp = self._get_component(args[0])
+        if comp is None:
+            return
+        cfg, _, _, directory = comp
+
+        name = args[1]
+        if name in self._instance_map:
+            self._send_error('Name already in use: "%s"' % name)
+            return
+
+        self._logger.info('Starting %r, directory %r',
+                          name, directory)
+
+        # Create component instance.
+        with self.server.dir_lock:
+            if self._server_per_obj:  # pragma no cover
+                # Allocate a server.
+                server, server_info = RAM.allocate(resource_desc)
+                if server is None:
+                    raise RuntimeError('Server allocation failed :-(')
+
+                obj = server.load_model(egg_name)
+            else:  # Used for testing.
+                server = None
+                obj = Container.load_from_eggfile(egg_file, log=self._logger)
+        obj.name = name
+
+        # Create wrapper for component.
+        wrapper = ComponentWrapper(name, obj, cfg, server, self._send_reply,
+                                   self._send_exc, self._logger)
+        self._instance_map[name] = (wrapper, WorkerPool.get())
+        self._servers[wrapper] = server
+        self._send_reply('Object %s started.' % name)
 
 
 
@@ -554,13 +673,14 @@ Available Commands:
     # _COMMANDS['getLicense'] = _get_license
     # _COMMANDS['getQueues'] = _get_queues
     # _COMMANDS['getStatus'] = _get_status
-    # _COMMANDS['getSysInfo'] = _get_sys_info
+    _COMMANDS['getSysInfo'] = _get_sys_info
     # _COMMANDS['getVersion'] = _get_version
     # _COMMANDS['hb'] = _heartbeat
     # _COMMANDS['heartbeat'] = _heartbeat
     _COMMANDS['help'] = _help
     _COMMANDS['h'] = _help
     # _COMMANDS['invoke'] = _invoke
+    # _COMMANDS['l'] = _list_properties
     # _COMMANDS['la'] = _list_categories
     # _COMMANDS['lav'] = _list_array_values
     # _COMMANDS['lc'] = _list_components
@@ -575,7 +695,6 @@ Available Commands:
     # _COMMANDS['listProperties'] = _list_properties
     # _COMMANDS['listValues'] = _list_values
     # _COMMANDS['listValuesURL'] = _list_values_url
-    # _COMMANDS['l'] = _list_properties
     # _COMMANDS['lm'] = _list_methods
     # _COMMANDS['lo'] = _list_monitors
     # _COMMANDS['ls'] = _list_properties
@@ -585,7 +704,7 @@ Available Commands:
     # _COMMANDS['move'] = _move
     # _COMMANDS['mv'] = _move
     # _COMMANDS['ps'] = _ps
-    # _COMMANDS['quit'] = _quit
+    _COMMANDS['quit'] = _quit
     # _COMMANDS['rename'] = _move
     # _COMMANDS['rn'] = _move
     # _COMMANDS['setDictionary'] = _set_dictionary
