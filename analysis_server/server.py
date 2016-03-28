@@ -159,7 +159,6 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
                 if name.endswith('.cfg'):
                     path = os.path.join(dirpath, name)
                     path = path.lstrip('.').lstrip(os.sep)
-                    print('Reading config file %r' % path)
                     try:
                         self.read_config(path)
                     except Exception as exc:
@@ -232,7 +231,7 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
                     dirname = cwd
 
             if not dirname in sys.path:
-                logging.debug('    prepending %r to sys.path', dirname)
+                logging.info('    prepending %r to sys.path', dirname)
                 sys.path.insert(0, dirname)
                 prepended = True
             else:
@@ -270,7 +269,7 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
                 if obj is not root:
                     root.add('comp', obj)
 
-                p.setup()
+                p.setup(check=False)
 
             # Check for optional diectory path.
             directory = None

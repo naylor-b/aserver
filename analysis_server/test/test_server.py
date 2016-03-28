@@ -2,36 +2,50 @@
 from __future__ import print_function
 
 import os
+import sys
 import unittest
 import tempfile
 import shutil
 import platform
 import getpass
 
+from openmdao.util.file_util import build_directory
+
 from analysis_server.server import start_server, stop_server
 from analysis_server.client import Client
 
+STARTDIR = os.getcwd()
 
 class TestCase(unittest.TestCase):
     """ Test AnalysisServer emulation. """
 
     def setUp(self):
-        self.startdir = os.getcwd()
+        self.testdir = os.path.dirname(os.path.abspath(__file__))
         self.tempdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tempdir, 'd1'))
+        os.makedirs(os.path.join(self.tempdir, 'd2/d3'))
+
+        shutil.copyfile(os.path.join(self.testdir, 'ASTestComp.py'),
+                       os.path.join(self.tempdir, 'd2', 'd3', 'ASTestComp.py'))
+        shutil.copyfile(os.path.join(self.testdir, 'TestComponent.cfg'),
+                       os.path.join(self.tempdir, 'd2', 'd3', 'TestComponent.cfg'))
+
         os.chdir(self.tempdir)
-        os.mkdir('logs')
+
         self.server, self.port = start_server()
         self.client = Client(port=self.port)
 
     def tearDown(self):
-        self.client.quit()
-        stop_server(self.server)
-        os.chdir(self.startdir)
-
         try:
-            shutil.rmtree(self.tempdir)
-        except OSError:
-            pass
+            self.client.quit()
+            stop_server(self.server)
+        finally:
+            os.chdir(STARTDIR)
+            if not os.environ.get('OPENMDAO_KEEPDIRS'):
+                try:
+                    shutil.rmtree(self.tempdir)
+                except OSError:
+                    pass
 
     def send_recv(self, cmd, raw=False, count=None):
         """ Set request, process, return replies. """

@@ -2,7 +2,14 @@ MANIFEST.in
 README.txt
 setup.cfg
 analysis_server/__init__.py
+analysis_server/client.py
+analysis_server/mixin.py
+analysis_server/mp_util.py
+analysis_server/objserver.py
+analysis_server/publickey.py
 analysis_server/server.py
+analysis_server/stream.py
+analysis_server/wrkpool.py
 analysis_server.egg-info/PKG-INFO
 analysis_server.egg-info/SOURCES.txt
 analysis_server.egg-info/dependency_links.txt
