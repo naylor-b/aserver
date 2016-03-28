@@ -85,6 +85,12 @@ class TestCase(unittest.TestCase):
             self.fail('%d reply lines, %d expected lines'
                       % (len(reply_lines), len(expected_lines)))
 
+    def test_get_status(self):
+        expected = {'comp': 'ready'}
+        self.client.start('TestComp', 'comp')
+        result = self.client.get_status()
+        self.assertEqual(result, expected)
+
     def test_get_sys_info(self):
         expected = {
             'version': '7.0',

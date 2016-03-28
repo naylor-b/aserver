@@ -557,6 +557,23 @@ Available Commands:
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
 
+    def _get_status(self, args):
+        """
+        Lists the run status of all component instances.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getStatus')
+            return
+
+        lines = []
+        for name in sorted(self._instance_map.keys()):
+            lines.append('%s: ready' % name)
+        self._send_reply('\n'.join(lines))
+
     def _get_sys_info(self, args):
         """
         Retrieves information about the server and the system it is on.
