@@ -56,6 +56,7 @@ from analysis_server.stream  import Stream
 from analysis_server.wrkpool import WorkerPool
 from analysis_server.publickey import make_private
 from analysis_server.mp_util import read_allowed_hosts
+from analysis_server.cfg_wrapper import _ConfigWrapper
 # from analysis_server.wrapper import ComponentWrapper, _find_var_wrapper
 # from analysis_server.filexfer import filexfer
 
@@ -279,23 +280,23 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
                     raise ValueError('directory %r must be a subdirectory'
                                      % directory)
 
-            # # Create wrapper configuration object.
-            # cfg_path = os.path.join(cwd, os.path.basename(path))
-            # try:
-            #     cfg = _WrapperConfig(config, obj, cfg_path, None)
-            # except Exception as exc:
-            #     logging.error(traceback.format_exc())
-            #     raise RuntimeError("Bad configuration in %r: %s" % (path, exc))
-            #
-            # # Register under path normalized to category/component form.
-            # path = cfg.cfg_path[len(self._root)+1:-4]  # Drop prefix & '.cfg'
-            # path = path.replace('\\', '/')  # Always use '/'.
-            # logging.debug('    registering %s', path)
-            # with self.components as comps:
-            #     comps[path] = (cfg, None, None, directory)
-            # p.cleanup()
-            # if hasattr(obj, 'pre_delete'):
-            #     obj.pre_delete()
+            # Create wrapper configuration object.
+            cfg_path = os.path.join(cwd, os.path.basename(path))
+            try:
+                cfg = _ConfigWrapper(config, obj, cfg_path)
+            except Exception as exc:
+                logging.error(traceback.format_exc())
+                raise RuntimeError("Bad configuration in %r: %s" % (path, exc))
+
+            # Register components in a flat structure.
+            path = cfg.cfg_path[len(self._root)+1:-4]  # Drop prefix & '.cfg'
+            path = path.replace('\\', '/')  # Always use '/'.
+            logging.debug('    registering %s', path)
+            with self.components as comps:
+                comps[path.split('/')[-1]] = (cfg, None, None, directory)
+            p.cleanup()
+            if hasattr(obj, 'pre_delete'):
+                obj.pre_delete()
 
         finally:
             if cleanup and os.path.exists(name):
@@ -496,9 +497,9 @@ version: %s""" % _VERSION)
         self._send_error('Exception: %r' % exc, req_id)
         self._logger.error(traceback.format_exc())
 
-
-
+    ######################################
     # TELNET API methods
+    ######################################
     def _help(self, args):
         """
         Help on Analysis Server commands.
@@ -556,9 +557,6 @@ Available Commands:
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
 
-
-
-
     def _get_sys_info(self, args):
         """
         Retrieves information about the server and the system it is on.
@@ -589,7 +587,22 @@ user name: %s"""
                 platform.release(), platform.python_version(),
                 getpass.getuser()))
 
+    def _list_components(self, args):
+        """
+        Lists all the components available.
 
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) > 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listComponents,lc')
+            return
+
+        with self.server.components as comps:
+            lines = ['%d components found:' % len(comps)]
+            lines.extend(sorted(comps.keys()))
+        self._send_reply('\n'.join(lines))
 
     def _quit(self, args):
         """
@@ -688,7 +701,7 @@ user name: %s"""
     # _COMMANDS['lg'] = _list_globals
     # _COMMANDS['listArrayValues'] = _list_array_values
     # _COMMANDS['listCategories'] = _list_categories
-    # _COMMANDS['listComponents'] = _list_components
+    _COMMANDS['listComponents'] = _list_components
     # _COMMANDS['listGlobals'] = _list_globals
     # _COMMANDS['list'] = _list_properties
     # _COMMANDS['listMethods'] = _list_methods

@@ -265,15 +265,9 @@ class Client(object):
 
     def list_components(self, category=None):
         """
-        Lists all components available in `category`.
-
-        category: string
-            Category to list.
+        Lists all components available.
         """
-        req = 'listComponents'
-        if category:
-            req += ' %s' % category
-        reply = self._send_recv(req)
+        reply = self._send_recv('listComponents')
         return [line.strip() for line in reply.split('\n')[1:]]
 
     def list_globals(self):

@@ -40,6 +40,9 @@ class TestCase(unittest.TestCase):
             self.client.quit()
             stop_server(self.server)
         finally:
+            if os.path.exists('openmdao_log.txt'):
+                with open('openmdao_log.txt', 'r') as f:
+                    print (f.read())
             os.chdir(STARTDIR)
             if not os.environ.get('OPENMDAO_KEEPDIRS'):
                 try:
@@ -87,7 +90,7 @@ class TestCase(unittest.TestCase):
             'version': '7.0',
             'build': '42968',
             'num clients': '1',
-            'num components': '0',
+            'num components': '1',
             'os name': platform.system(),
             'os arch': platform.processor(),
             'os version': platform.release(),
@@ -144,6 +147,10 @@ class TestCase(unittest.TestCase):
         ]
         result = self.client.help()
         self.assertEqual(result, expected)
+
+    def test_list_components(self):
+        result = self.client.list_components()
+        self.assertEqual(result, ['TestComponent'])
 
 if __name__ == '__main__':
     unittest.main()
