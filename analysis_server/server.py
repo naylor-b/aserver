@@ -587,6 +587,24 @@ user name: %s"""
                 platform.release(), platform.python_version(),
                 getpass.getuser()))
 
+    def _get_version(self, args):
+        """
+        Gets the version and build number for Analysis Server.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getVersion')
+            return
+
+        self._send_reply("""\
+OpenMDAO Analysis Server %s
+Use at your own risk!
+Attempting to support Phoenix Integration, Inc.
+version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
+
     def _list_components(self, args):
         """
         Lists all the components available.
@@ -688,7 +706,7 @@ user name: %s"""
     # _COMMANDS['getQueues'] = _get_queues
     # _COMMANDS['getStatus'] = _get_status
     _COMMANDS['getSysInfo'] = _get_sys_info
-    # _COMMANDS['getVersion'] = _get_version
+    _COMMANDS['getVersion'] = _get_version
     # _COMMANDS['hb'] = _heartbeat
     # _COMMANDS['heartbeat'] = _heartbeat
     _COMMANDS['help'] = _help

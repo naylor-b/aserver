@@ -100,6 +100,15 @@ class TestCase(unittest.TestCase):
         result = self.client.get_sys_info()
         self.assertEqual(result, expected)
 
+    def test_get_version(self):
+        expected = """\
+OpenMDAO Analysis Server 0.1
+Use at your own risk!
+Attempting to support Phoenix Integration, Inc.
+version: 7.0, build: 42968"""
+        result = self.client.get_version()
+        self.assertEqual(result, expected)
+
     def test_help(self):
         expected = [
             'Available Commands:',
