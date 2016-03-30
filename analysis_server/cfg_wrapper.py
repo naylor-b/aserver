@@ -8,6 +8,7 @@ from inspect import getmembers, ismethod, isfunction
 from six import iteritems
 
 from analysis_server.wrapper import _find_var_wrapper
+from analysis_server.proxy import _setup_obj
 
 class _ConfigWrapper(object):
     """
@@ -24,7 +25,7 @@ class _ConfigWrapper(object):
 
     """
 
-    def __init__(self, config, instance, cfg_path):
+    def __init__(self, config, section, timestamp):
 
         # Get description info.
         defaults = {
@@ -36,27 +37,41 @@ class _ConfigWrapper(object):
             'keywords': '',
             'requirements': '',
         }
-        for option in defaults:
-            if not config.has_option('AnalysisServer', option):
-                config.set('AnalysisServer', option, defaults[option])
-            setattr(self, option, config.get('AnalysisServer', option))
 
-        # Normalize name of config file to <component_name>-<version>.cfg.
-        cfg_name = os.path.basename(cfg_path)
-        name, _, version = cfg_name.partition('-')
-        if not version:
-            name = name[:-4]  # Drop '.cfg'
-            if self.version:
-                version = self.version
+        # Get Python class and create temporary instance.
+        if config.has_option(section, 'filename'):
+            fname = config.get(section, 'filename')
+        else:
+            fname = None
+
+        self.filename = fname
+        
+        if config.has_option(section, 'args'):
+            args = [a.strip() for a in config.get(section, 'args').split()
+                                   if a.strip()]
+        else:
+            args = []
+
+        p, instance = _setup_obj(section, fname, args=args)
+
+        # Check for optional diectory path.
+        self.directory = directory = None
+        if config.has_option(section, 'directory'):
+            directory = config.get(section, 'directory')
+            if os.path.isabs(directory) or directory.startswith('..'):
+                raise ValueError('directory %r must be a subdirectory'
+                                 % directory)
+
+        self.classname = section
+
+        for option, value in defaults.items():
+            if not config.has_option(section, option):
+                setattr(self, option, value)
             else:
-                raise ValueError('No version in .cfg file or .cfg filename')
-        elif not self.version:
-            raise ValueError('No version in .cfg file')
-
-        self.cfg_path = cfg_path
+                setattr(self, option, config.get(section, option))
 
         # Timestamp from config file timestamp
-        self.timestamp = time.ctime(os.path.getmtime(cfg_path))
+        self.timestamp = timestamp
         self.checksum = 0
         self.has_icon = False
 
@@ -64,11 +79,6 @@ class _ConfigWrapper(object):
         if not self.description:
             if instance.__doc__ is not None:
                 self.description = instance.__doc__
-
-        # Default author from file owner.
-        if not self.author and sys.platform != 'win32':
-            stat_info = os.stat(cfg_path)
-            self.author = pwd.getpwuid(stat_info.st_uid).pw_name
 
         # Get properties.
         self.inputs = self._setup_mapping(instance, 'in')
@@ -80,12 +90,15 @@ class _ConfigWrapper(object):
         # Get methods.
         self.methods = {}
         for name, meth in sorted(getmembers(instance, ismethod)):
-            # Register all valid non-vanilla methods.
             if name.startswith('_'):
                 continue
 
             logging.debug('    register %s()', name)
             self.methods[name] = name
+
+        p.cleanup()
+        if hasattr(instance, 'pre_delete'):
+            instance.pre_delete()
 
     def _setup_mapping(self, instance, iotype):
         """

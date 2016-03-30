@@ -34,7 +34,7 @@ import ConfigParser
 import getpass
 import inspect
 import logging
-import optparse
+import argparse
 import platform
 import shutil
 import signal
@@ -59,7 +59,7 @@ from analysis_server.mp_util import read_allowed_hosts
 from analysis_server.cfg_wrapper import _ConfigWrapper
 # from analysis_server.wrapper import ComponentWrapper, _find_var_wrapper
 # from analysis_server.filexfer import filexfer
-
+from analysis_server.proxy import _setup_obj, SystemWrapper, SysManager
 
 DEFAULT_PORT = 1835
 ERROR_PREFIX = 'ERROR: '
@@ -109,7 +109,8 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
     allow_reuse_address = True
 
-    def __init__(self, host='localhost', port=DEFAULT_PORT, allowed_hosts=None):
+    def __init__(self, host='localhost', port=DEFAULT_PORT, allowed_hosts=None,
+                 available_systems=(), config_files=()):
         SocketServer.TCPServer.__init__(self, (host, port), _Handler)
 
         self._allowed_hosts = allowed_hosts or ['127.0.0.1']
@@ -122,7 +123,10 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self._root = os.getcwd()
         self._dir_lock = threading.RLock()
         self._config_errors = 0
-        self._read_comp_configurations()
+        #self._read_comp_configurations()
+        for f in config_files:
+            print("reading config:", f)
+            self.read_config(f)
 
         # Set False in test_server.py to avoid issues trying to clean up
         # the 'logs' directory under Windows.
@@ -153,19 +157,19 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         """ Number of configuration errors detected. """
         return self._config_errors
 
-    def _read_comp_configurations(self):
-        """ Read component configuration files. """
-        for dirpath, dirnames, filenames in os.walk('.'):
-            for name in sorted(filenames):
-                if name.endswith('.cfg'):
-                    path = os.path.join(dirpath, name)
-                    path = path.lstrip('.').lstrip(os.sep)
-                    try:
-                        self.read_config(path)
-                    except Exception as exc:
-                        print(str(exc) or repr(exc))
-                        logging.error(str(exc) or repr(exc))
-                        self._config_errors += 1
+    # def _read_comp_configurations(self):
+    #     """ Read component configuration files. """
+    #     for dirpath, dirnames, filenames in os.walk('.'):
+    #         for name in sorted(filenames):
+    #             if name.endswith('.cfg'):
+    #                 path = os.path.join(dirpath, name)
+    #                 path = path.lstrip('.').lstrip(os.sep)
+    #                 try:
+    #                     self.read_config(path)
+    #                 except Exception as exc:
+    #                     print(str(exc) or repr(exc))
+    #                     logging.error(str(exc) or repr(exc))
+    #                     self._config_errors += 1
 
     def read_config(self, path):
         """
@@ -175,6 +179,8 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             Path to config file.
 
         """
+        path = os.path.abspath(path)
+
         logging.info('Reading config file %r', path)
         config = ConfigParser.SafeConfigParser()
         config.optionxform = str  # Preserve case.
@@ -188,119 +194,42 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             if directory:
                 os.chdir(directory)
             try:
-                self._process_config(config, path)
+                for section in config.sections():
+                    self._process_config(config, section, path)
             finally:
                 os.chdir(orig)
 
-    def _process_config(self, config, path):
+    def _process_config(self, config, section, path):
         """
         Process data read into `config` from `path`.
 
         config: :class:`ConfigParser.ConfigParser`
             Configuration data.
 
+        section: str
+            The section in the config file, which corresponds to
+            the data for a particular class.
+
         path: string
             Path to config file.
 
         """
-        for sect in ('AnalysisServer',):
-            if not config.has_section(sect):
-                raise RuntimeError("No %s section in %r" % (sect, path))
-
-        if config.has_option('AnalysisServer', 'version'):
-            cfg_version = config.get('AnalysisServer', 'version')
-        else:
-            raise ValueError('No version metadata found in in %s file' %
-                             path)
-
-        cfg_dir = os.path.dirname(path)
-        cfg_name = os.path.basename(path)
-        name = os.path.splitext(cfg_name)[0]
-
         cwd = os.getcwd()
-        cleanup = not os.path.exists(name)
+
+        # Create wrapper configuration object.
+        cfg_path = os.path.join(cwd, os.path.basename(path))
         try:
-            # Get Python class and create temporary instance.
-            classname = name
-            filename = config.get('AnalysisServer', 'filename')
-            dirname = os.path.dirname(filename)
-            modname = os.path.splitext(os.path.basename(filename))[0]  # drop '.py'
-            if not os.path.isabs(dirname):
-                if dirname:
-                    dirname = os.path.join(cwd, dirname)
-                else:
-                    dirname = cwd
+            cfg = _ConfigWrapper(config, section,
+                                 time.ctime(os.path.getmtime(cfg_path))
+)
+        except Exception as exc:
+            logging.error(traceback.format_exc())
+            raise RuntimeError("Bad configuration in %r: %s" % (cfg_path, exc))
 
-            if not dirname in sys.path:
-                logging.info('    prepending %r to sys.path', dirname)
-                sys.path.insert(0, dirname)
-                prepended = True
-            else:
-                prepended = False
-            try:
-                __import__(modname)
-            except ImportError as exc:
-                raise RuntimeError("Can't import %r: %r" \
-                                   % (modname, exc))
-            finally:
-                if prepended:
-                    sys.path.pop(0)
+        logging.debug('    registering %s', section)
+        with self.components as comps:
+            comps[section] = (cfg, cfg.directory)
 
-            module = sys.modules[modname]
-            try:
-                cls = getattr(module, classname)
-            except AttributeError as exc:
-                raise RuntimeError("Can't get class %r in %r: %r"
-                                   % (classname, modname, exc))
-
-            with DirContext(dirname):
-                try:
-                    obj = cls()
-                except Exception as exc:
-                    logging.error(traceback.format_exc())
-                    raise RuntimeError("Can't instantiate %s.%s: %r"
-                                       % (modname, classname, exc))
-
-                if isinstance(obj, Group):
-                    root = obj
-                else:
-                    root = Group()
-
-                p = Problem(root=root)
-                if obj is not root:
-                    root.add('comp', obj)
-
-                p.setup(check=False)
-
-            # Check for optional diectory path.
-            directory = None
-            if config.has_option('AnalysisServer', 'directory'):
-                directory = config.get('AnalysisServer', 'directory')
-                if os.path.isabs(directory) or directory.startswith('..'):
-                    raise ValueError('directory %r must be a subdirectory'
-                                     % directory)
-
-            # Create wrapper configuration object.
-            cfg_path = os.path.join(cwd, os.path.basename(path))
-            try:
-                cfg = _ConfigWrapper(config, obj, cfg_path)
-            except Exception as exc:
-                logging.error(traceback.format_exc())
-                raise RuntimeError("Bad configuration in %r: %s" % (path, exc))
-
-            # Register components in a flat structure.
-            path = cfg.cfg_path[len(self._root)+1:-4]  # Drop prefix & '.cfg'
-            path = path.replace('\\', '/')  # Always use '/'.
-            logging.debug('    registering %s', path)
-            with self.components as comps:
-                comps[path.split('/')[-1]] = (cfg, None, None, directory)
-            p.cleanup()
-            if hasattr(obj, 'pre_delete'):
-                obj.pre_delete()
-
-        finally:
-            if cleanup and os.path.exists(name):
-                shutil.rmtree(name)
 
     # This will be exercised by client side tests.
     def finish_request(self, request, client_address):  # pragma no cover
@@ -439,6 +368,29 @@ version: %s""" % _VERSION)
         for name in self._instance_map.keys():
             self.__end(name)
 
+    def _get_component(self, typ):
+        """
+        Return '(cls, cfg)' for `typ`.
+
+        typ: string
+            Component path.
+        """
+        typ = typ.strip('"').lstrip('/')
+        name, _, version = typ.partition('?')
+        try:
+            with self.server.components as comps:
+                logging.error("KEYS: %s" % comps.keys())
+                return comps[name]
+        except KeyError:
+            logging.error("KEYERROR: %s" % name)
+            pass
+
+        if not '/' in typ:  # Just to match real AnalysisServer.
+            typ = '/'+typ
+        self._send_error('component <%s> does not match a known component'
+                         % typ)
+        return None, None
+
     def _send_reply(self, reply, req_id=None):
         """
         Send reply to client, with optional logging.
@@ -500,6 +452,44 @@ version: %s""" % _VERSION)
     ######################################
     # TELNET API methods
     ######################################
+
+    def _end(self, args):
+        """
+        Unloads a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'end <object>')
+            return
+
+        name = args[0]
+        try:
+            self.__end(name)
+        except KeyError:
+            self._send_error('no such object: <%s>' % name)
+        else:
+            self._send_reply("""\
+%s completed.
+Object %s ended.""" % (name, name))
+
+    def __end(self, name):
+        """
+        Delete component instance `name`.
+
+        name: string
+            Instance to be deleted.
+        """
+        self._logger.info('End %r', name)
+        proxy, worker = self._instance_map.pop(name)
+        proxy.pre_delete()
+        WorkerPool.release(worker)
+        manager = self._managers.pop(proxy)
+        if manager is not None:  # pragma no cover
+            manager.shutdown()
+
     def _help(self, args):
         """
         Help on Analysis Server commands.
@@ -653,8 +643,6 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
 
         self._logger.info('Client quit')
 
-
-
     def _start(self, args):
         """
         Creates a new component instance.
@@ -670,10 +658,9 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
         if len(args) > 2:
             raise NotImplementedError('start, args > 2')
 
-        comp = self._get_component(args[0])
-        if comp is None:
+        cfg, directory = self._get_component(args[0])
+        if cfg is None:
             return
-        cfg, _, _, directory = comp
 
         name = args[1]
         if name in self._instance_map:
@@ -685,23 +672,31 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
 
         # Create component instance.
         with self.server.dir_lock:
-            if self._server_per_obj:  # pragma no cover
-                # Allocate a server.
-                server, server_info = RAM.allocate(resource_desc)
-                if server is None:
-                    raise RuntimeError('Server allocation failed :-(')
+            manager = SysManager()
+            manager.start()
+            proxy = manager.SystemWrapper()
+            proxy.init(name, cfg.filename, directory=directory)
+            proxy.set_name(name)
 
-                obj = server.load_model(egg_name)
-            else:  # Used for testing.
-                server = None
-                obj = Container.load_from_eggfile(egg_file, log=self._logger)
-        obj.name = name
+            # if self._server_per_obj:  # pragma no cover
+            #     # Allocate a server.
+            #     server, server_info = RAM.allocate(resource_desc)
+            #     if server is None:
+            #         raise RuntimeError('Server allocation failed.')
+            #
+            #     obj = server.load_model(egg_name)
+            # else:  # Used for testing.
+            #     server = None
+            #     p, obj = _setup_obj(cfg.cfg_path, cfg.classname, directory)
+
+        #obj.name = name
 
         # Create wrapper for component.
-        wrapper = ComponentWrapper(name, obj, cfg, server, self._send_reply,
-                                   self._send_exc, self._logger)
-        self._instance_map[name] = (wrapper, WorkerPool.get())
-        self._servers[wrapper] = server
+        # wrapper = ComponentWrapper(name, obj, cfg, server, self._send_reply,
+        #                            self._send_exc, self._logger)
+        #self._instance_map[name] = (wrapper, WorkerPool.get())
+        self._instance_map[name] = (proxy, WorkerPool.get())
+        self._managers[wrapper] = manager
         self._send_reply('Object %s started.' % name)
 
 
@@ -711,7 +706,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
     # _COMMANDS['addProxyClients'] = _add_proxy_clients
     # _COMMANDS['d'] = _describe
     # _COMMANDS['describe'] = _describe
-    # _COMMANDS['end'] = _end
+    _COMMANDS['end'] = _end
     # _COMMANDS['execute'] = _execute
     # _COMMANDS['getBranchesAndTags'] = _get_branches
     # _COMMANDS['getDirectTransfer'] = _get_direct_transfer
@@ -762,7 +757,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
     # _COMMANDS['setRunQueue'] = _set_run_queue
     # _COMMANDS['setServerAuthInfo'] = _set_auth_info
     # _COMMANDS['set'] = _set
-    # _COMMANDS['start'] = _start
+    _COMMANDS['start'] = _start
     # _COMMANDS['versions'] = _versions
     # _COMMANDS['v'] = _versions
     # _COMMANDS['x'] = _execute
@@ -774,7 +769,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
 
 
 def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
-                 debug=False, resources=None):
+                 debug=False, args=()):
     """
     Start server process at `address` and `port`.
     Returns ``(proc, port)``.
@@ -792,8 +787,8 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
     debug: bool
         Set logging level to ``DEBUG``, default is ``INFO``.
 
-    resources: string
-        Filename for resources to be configured.
+    args: iter of str
+        Other command line args to pass to server.
     """
     if allowed_hosts is None:
         allowed_hosts = ['127.0.0.1', socket.gethostname()]
@@ -812,7 +807,7 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
 
     # Start process.
     args = ['python', server_path,
-            '--address', address, '--port', '%d' % port, '--up', server_up]
+            '--address', address, '--port', '%d' % port, '--up', server_up] + args
     if debug:
         args.append('--debug')
     proc = ShellProc(args, stdout=server_out, stderr=STDOUT)
@@ -881,32 +876,37 @@ def main():  # pragma no cover
     --debug:
         Set logging level to ``DEBUG``, default is ``INFO``.
 
-    --no-heartbeat:
-        Do not send heartbeat replies. Simplifies debugging.
-
     --up: string
         Filename written once server is initialized. Typically used for
         programmatic startup during testing.
     """
-    parser = optparse.OptionParser()
-    parser.add_option('--hosts', action='store', type='str',
-                      default='hosts.allow', help='filename for allowed hosts')
-    parser.add_option('--address', action='store', type='str',
-                      default='localhost',
-                      help='network address to serve.')
-    parser.add_option('--port', action='store', type='int',
-                      default=DEFAULT_PORT, help='port to listen on')
-    parser.add_option('--debug', action='store_true',
-                      help='Set logging level to DEBUG')
-    parser.add_option('--no-heartbeat', action='store_true',
-                      help='Do not send heartbeat replies')
-    parser.add_option('--up', action='store', default='',
-                      help="if non-null, file written when server is 'up'")
 
-    options, arguments = parser.parse_args()
-    if arguments:
-        parser.print_help()
-        sys.exit(1)
+    # --no-heartbeat:
+    #     Do not send heartbeat replies. Simplifies debugging.
+    #
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--hosts', type=str, default='hosts.allow',
+                        help='filename for allowed hosts')
+    parser.add_argument('-a', '--address', type=str, default='localhost',
+                        help='network address to serve.')
+    parser.add_argument('-p', '--port', type=int,
+                        default=DEFAULT_PORT, help='port to listen on')
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='Set logging level to DEBUG')
+    # parser.add_argument('--no-heartbeat', action='store_true',
+    #                     help='Do not send heartbeat replies')
+    parser.add_argument('--up', default='',
+                       help="if non-null, file written when server is 'up'")
+
+    parser.add_argument('-c', '--config', type=str, nargs="*", default=[],
+                        help='config file(s) containing info about systems that '
+                        'will be available in this server.')
+    parser.add_argument('-s', '--system', type=str, nargs="*", default=[],
+                        help='classnames of importable systems that will be '
+                        'available in this server.')
+
+    options = parser.parse_args()
 
     level = logging.DEBUG if options.debug else logging.INFO
     logging.getLogger().setLevel(level)
@@ -932,7 +932,8 @@ def main():  # pragma no cover
 
     # Create server.
     host = options.address or socket.gethostname()
-    server = Server(host, options.port, allowed_hosts)
+    server = Server(host, options.port, allowed_hosts,
+                config_files=options.config, available_systems=options.system)
     if server.config_errors:
         print('%d component configuration errors detected.'
                % server.config_errors)

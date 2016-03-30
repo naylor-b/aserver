@@ -27,12 +27,12 @@ class TestCase(unittest.TestCase):
 
         shutil.copyfile(os.path.join(self.testdir, 'ASTestComp.py'),
                        os.path.join(self.tempdir, 'd2', 'd3', 'ASTestComp.py'))
-        shutil.copyfile(os.path.join(self.testdir, 'TestComponent.cfg'),
-                       os.path.join(self.tempdir, 'd2', 'd3', 'TestComponent.cfg'))
+        shutil.copyfile(os.path.join(self.testdir, 'TestComponents.cfg'),
+                       os.path.join(self.tempdir, 'd2', 'd3', 'TestComponents.cfg'))
 
         os.chdir(self.tempdir)
 
-        self.server, self.port = start_server()
+        self.server, self.port = start_server(args=['-c', 'd2/d3/TestComponents.cfg'])
         self.client = Client(port=self.port)
 
     def tearDown(self):
@@ -42,6 +42,9 @@ class TestCase(unittest.TestCase):
         finally:
             if os.path.exists('openmdao_log.txt'):
                 with open('openmdao_log.txt', 'r') as f:
+                    print (f.read())
+            if os.path.exists('as-1835.out'):
+                with open('as-1835.out', 'r') as f:
                     print (f.read())
             os.chdir(STARTDIR)
             if not os.environ.get('OPENMDAO_KEEPDIRS'):
@@ -87,7 +90,7 @@ class TestCase(unittest.TestCase):
 
     def test_get_status(self):
         expected = {'comp': 'ready'}
-        self.client.start('TestComp', 'comp')
+        self.client.start('TestComponent', 'comp')
         result = self.client.get_status()
         self.assertEqual(result, expected)
 
@@ -96,7 +99,7 @@ class TestCase(unittest.TestCase):
             'version': '7.0',
             'build': '42968',
             'num clients': '1',
-            'num components': '1',
+            'num components': '2',
             'os name': platform.system(),
             'os arch': platform.processor(),
             'os version': platform.release(),
@@ -165,7 +168,11 @@ version: 7.0, build: 42968"""
 
     def test_list_components(self):
         result = self.client.list_components()
-        self.assertEqual(result, ['TestComponent'])
+
+
+        self.assertEqual(sorted(result),
+                         ['TestComponent',
+                          'openmdao.components.exec_comp.ExecComp'])
 
 if __name__ == '__main__':
     unittest.main()
