@@ -199,7 +199,7 @@ def _float2str(val):
 #             finally:
 #                 self._start = None
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def get(self, path, req_id):
 #         """
@@ -215,7 +215,7 @@ def _float2str(val):
 #             wrapper, attr = self._get_var_wrapper(path)
 #             self._send_reply(wrapper.get(attr, path), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def get_hierarchy(self, req_id, gzipped):
 #         """
@@ -253,7 +253,7 @@ def _float2str(val):
 #             lines.append('</Group>')
 #             self._send_reply('\n'.join(lines), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def invoke(self, method, full, req_id):
 #         """
@@ -297,7 +297,7 @@ def _float2str(val):
 #
 #             self._send_reply(reply, req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def list_array_values(self, path, req_id):
 #         """
@@ -312,7 +312,7 @@ def _float2str(val):
 #         try:
 #             raise NotImplementedError('listArrayValues')
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def list_methods(self, full, req_id):
 #         """
@@ -335,7 +335,7 @@ def _float2str(val):
 #             lines[0] = '%d methods found:' % (len(lines)-1)
 #             self._send_reply('\n'.join(lines), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def list_monitors(self, req_id):
 #         """
@@ -371,7 +371,7 @@ def _float2str(val):
 #             lines.extend(sorted(text_files))
 #             self._send_reply('\n'.join(lines), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def list_properties(self, path, req_id):
 #         """
@@ -387,7 +387,7 @@ def _float2str(val):
 #         try:
 #             self._send_reply(self._list_properties(path), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def _list_properties(self, path):
 #         """
@@ -476,7 +476,7 @@ def _float2str(val):
 #                                          % (name, typ, access, len(val), val))
 #             self._send_reply('\n'.join(lines), req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def list_values_url(self, path, req_id):
 #         """
@@ -509,7 +509,7 @@ def _float2str(val):
 #             monitor.start()
 #             self._monitors[str(req_id)] = monitor  # Monitor id is request id.
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def stop_monitor(self, monitor_id, req_id):
 #         """
@@ -597,7 +597,7 @@ def _float2str(val):
 #
 #             self._send_reply(reply, req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def set(self, path, valstr, req_id):
 #         """
@@ -619,7 +619,7 @@ def _float2str(val):
 #             self._set(path, valstr)
 #             self._send_reply('value set for <%s>' % path, req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #     def _set(self, path, valstr, gzipped=False):
 #         """
@@ -664,7 +664,7 @@ def _float2str(val):
 #                                     % (var.attrib['name'], valstr[:1000], exc))
 #             self._send_reply('values set', req_id)
 #         except Exception as exc:
-#             self._send_exc(exc, req_id)
+#             self._send_exc(req_id)
 #
 #
 class BaseWrapper(object):

@@ -274,7 +274,6 @@ class _Handler(SocketServer.BaseRequestHandler):
         self._hb = None
         self._monitors = {}      # Maps from req_id to name.
         self._instance_map = {}  # Maps from name to (wrapper, worker).
-        self._servers = {}       # Maps from wrapper to server.
         #set_credentials(self.server.credentials)
 
         # Set up separate logger for each client.
@@ -353,7 +352,7 @@ version: %s""" % _VERSION)
                     try:
                         cmd(self, args[1:])
                     except Exception as exc:
-                        self._send_exc(exc)
+                        self._send_exc()
 
                 except EOFError:
                     break
@@ -436,7 +435,7 @@ version: %s""" % _VERSION)
         with self._lock:
             self._stream.send_reply(reply, req_id, 'error')
 
-    def _send_exc(self, exc, req_id=None):
+    def _send_exc(self, req_id=None):
         """
         Send exception reply to client, with optional logging.
 
@@ -446,7 +445,7 @@ version: %s""" % _VERSION)
         req_id: string
             Request ID, if requested in 'raw' mode.
         """
-        self._send_error('Exception: %r' % exc, req_id)
+        self._send_error(traceback.format_exc(), req_id)
         self._logger.error(traceback.format_exc())
 
     ######################################
@@ -483,10 +482,9 @@ Object %s ended.""" % (name, name))
             Instance to be deleted.
         """
         self._logger.info('End %r', name)
-        proxy, worker = self._instance_map.pop(name)
+        proxy, worker, manager = self._instance_map.pop(name)
         proxy.pre_delete()
         WorkerPool.release(worker)
-        manager = self._managers.pop(proxy)
         if manager is not None:  # pragma no cover
             manager.shutdown()
 
@@ -662,7 +660,9 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
         if cfg is None:
             return
 
+        classname = args[0]
         name = args[1]
+
         if name in self._instance_map:
             self._send_error('Name already in use: "%s"' % name)
             return
@@ -675,7 +675,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
             manager = SysManager()
             manager.start()
             proxy = manager.SystemWrapper()
-            proxy.init(name, cfg.filename, directory=directory)
+            proxy.init(classname, cfg.filename, directory=directory)
             proxy.set_name(name)
 
             # if self._server_per_obj:  # pragma no cover
@@ -695,8 +695,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
         # wrapper = ComponentWrapper(name, obj, cfg, server, self._send_reply,
         #                            self._send_exc, self._logger)
         #self._instance_map[name] = (wrapper, WorkerPool.get())
-        self._instance_map[name] = (proxy, WorkerPool.get())
-        self._managers[wrapper] = manager
+        self._instance_map[name] = (proxy, WorkerPool.get(), manager)
         self._send_reply('Object %s started.' % name)
 
 
@@ -716,7 +715,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
     # _COMMANDS['getIcon'] = _get_icon
     # _COMMANDS['getLicense'] = _get_license
     # _COMMANDS['getQueues'] = _get_queues
-    # _COMMANDS['getStatus'] = _get_status
+    _COMMANDS['getStatus'] = _get_status
     _COMMANDS['getSysInfo'] = _get_sys_info
     _COMMANDS['getVersion'] = _get_version
     # _COMMANDS['hb'] = _heartbeat

@@ -40,12 +40,12 @@ class TestCase(unittest.TestCase):
             self.client.quit()
             stop_server(self.server)
         finally:
-            if os.path.exists('openmdao_log.txt'):
-                with open('openmdao_log.txt', 'r') as f:
-                    print (f.read())
-            if os.path.exists('as-1835.out'):
-                with open('as-1835.out', 'r') as f:
-                    print (f.read())
+            # if os.path.exists('openmdao_log.txt'):
+            #     with open('openmdao_log.txt', 'r') as f:
+            #         print (f.read())
+            # if os.path.exists('as-1835.out'):
+            #     with open('as-1835.out', 'r') as f:
+            #         print (f.read())
             os.chdir(STARTDIR)
             if not os.environ.get('OPENMDAO_KEEPDIRS'):
                 try:
