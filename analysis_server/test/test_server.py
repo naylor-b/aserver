@@ -8,6 +8,8 @@ import tempfile
 import shutil
 import platform
 import getpass
+import time
+import glob
 
 from openmdao.util.file_util import build_directory
 
@@ -87,6 +89,35 @@ class TestCase(unittest.TestCase):
         if len(reply_lines) != len(expected_lines):
             self.fail('%d reply lines, %d expected lines'
                       % (len(reply_lines), len(expected_lines)))
+
+    def test_describe(self):
+        expected = {
+            'Version': '0.2',
+            'Author': 'anonymous  ( & < > )',
+            'hasIcon': 'false',
+            'Description': 'Component for testing AnalysisServer functionality.\nAn additional description line.  ( & < > )',
+            'Help URL': '',
+            'Keywords': '',
+            'Driver': 'false',
+            'Time Stamp': '',
+            'Requirements': '',
+            'HasVersionInfo': 'false',
+            'Checksum': '0',
+        }
+        files = glob.glob('d2/d3/TestComponents.cfg')
+        if len(files) < 1:
+            self.fail("Couldn't find TestComponents.cfg file.")
+
+        expected['Time Stamp'] = \
+            time.ctime(os.path.getmtime(files[0]))
+
+        result = self.client.describe('TestComponent')
+
+        for key, val in expected.items():
+            try:
+                self.assertEqual("%s: %s" % (key,val), "%s: %s" % (key,result[key]))
+            except KeyError:
+                self.fail("Key '%s' not found in results." % key)
 
     def test_get_status(self):
         expected = {'comp': 'ready'}

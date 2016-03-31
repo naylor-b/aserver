@@ -111,7 +111,16 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
     def __init__(self, host='localhost', port=DEFAULT_PORT, allowed_hosts=None,
                  available_systems=(), config_files=()):
-        SocketServer.TCPServer.__init__(self, (host, port), _Handler)
+        count = 0
+        while count < 10:
+            try:
+                SocketServer.TCPServer.__init__(self, (host, port), _Handler)
+            except socket.error as err:
+                if 'already in use' in str(err):
+                    port += 1
+                    count += 1
+            else:
+                break
 
         self._allowed_hosts = allowed_hosts or ['127.0.0.1']
         self._num_clients = 0
@@ -452,6 +461,59 @@ version: %s""" % _VERSION)
     # TELNET API methods
     ######################################
 
+    def _describe(self, args):
+        """
+        Describes a published component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'describe,d <category/component> [-xml]')
+            return
+
+        comp = self._get_component(args[0])
+        if comp is None:
+            return
+
+        cfg, directory = comp
+        has_version_info = 'false'
+
+        if len(args) > 1 and args[1] == '-xml':
+            self._send_reply("""\
+<Description>
+ <Version>%s</Version>
+ <Author>%s</Author>
+ <Description>%s</Description>
+ <HelpURL>%s</HelpURL>
+ <Keywords>%s</Keywords>
+ <TimeStamp>%s</TimeStamp>
+ <Checksum>%s</Checksum>
+ <Requirements>%s</Requirements>
+ <hasIcon>%s</hasIcon>
+ <HasVersionInfo>%s</HasVersionInfo>
+</Description>""" % (cfg.version, escape(cfg.author), escape(cfg.description),
+                     cfg.help_url, ' '.join(cfg.keywords), cfg.timestamp,
+                     cfg.checksum, escape(' '.join(cfg.requirements)),
+                     str(cfg.has_icon).lower(), has_version_info))
+        else:
+            self._send_reply("""\
+Version: %s
+Author: %s
+hasIcon: %s
+Description: %s
+Help URL: %s
+Keywords: %s
+Driver: false
+Time Stamp: %s
+Requirements: %s
+HasVersionInfo: %s
+Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
+                   cfg.description, cfg.help_url, ' '.join(cfg.keywords),
+                   cfg.timestamp, ' '.join(cfg.requirements),
+                   has_version_info, cfg.checksum))
+
     def _end(self, args):
         """
         Unloads a component instance.
@@ -466,27 +528,16 @@ version: %s""" % _VERSION)
 
         name = args[0]
         try:
-            self.__end(name)
+            self._logger.info('End %r', name)
+            proxy, worker, manager = self._instance_map.pop(name)
+            proxy.pre_delete()
+            WorkerPool.release(worker)
+            if manager is not None:  # pragma no cover
+                manager.shutdown()
         except KeyError:
             self._send_error('no such object: <%s>' % name)
         else:
-            self._send_reply("""\
-%s completed.
-Object %s ended.""" % (name, name))
-
-    def __end(self, name):
-        """
-        Delete component instance `name`.
-
-        name: string
-            Instance to be deleted.
-        """
-        self._logger.info('End %r', name)
-        proxy, worker, manager = self._instance_map.pop(name)
-        proxy.pre_delete()
-        WorkerPool.release(worker)
-        if manager is not None:  # pragma no cover
-            manager.shutdown()
+            self._send_reply("%s completed.\nObject %s ended.""" % (name, name))
 
     def _help(self, args):
         """
@@ -703,8 +754,8 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
 
     # Telnet API
     # _COMMANDS['addProxyClients'] = _add_proxy_clients
-    # _COMMANDS['d'] = _describe
-    # _COMMANDS['describe'] = _describe
+    _COMMANDS['d'] = _describe
+    _COMMANDS['describe'] = _describe
     _COMMANDS['end'] = _end
     # _COMMANDS['execute'] = _execute
     # _COMMANDS['getBranchesAndTags'] = _get_branches
