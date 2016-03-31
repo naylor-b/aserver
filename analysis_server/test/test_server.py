@@ -55,20 +55,20 @@ class TestCase(unittest.TestCase):
                 except OSError:
                     pass
 
-    def send_recv(self, cmd, raw=False, count=None):
-        """ Set request, process, return replies. """
-        self.client.set_command(cmd, raw)
-        self.handler.handle()
-        replies = self.client.get_replies()
-        if count is not None:
-            retries = 0
-            while len(replies) < count:
-                retries += 1
-                if retries >= 100:
-                    break
-                time.sleep(0.1)
-            replies = self.client.get_replies()
-        return replies
+    # def send_recv(self, cmd, raw=False, count=None):
+    #     """ Set request, process, return replies. """
+    #     self.client.set_command(cmd, raw)
+    #     self.handler.handle()
+    #     replies = self.client.get_replies()
+    #     if count is not None:
+    #         retries = 0
+    #         while len(replies) < count:
+    #             retries += 1
+    #             if retries >= 100:
+    #                 break
+    #             time.sleep(0.1)
+    #         replies = self.client.get_replies()
+    #     return replies
 
     def compare(self, reply, expected):
         reply_lines = reply.split('\n')
@@ -118,6 +118,24 @@ class TestCase(unittest.TestCase):
                 self.assertEqual("%s: %s" % (key,val), "%s: %s" % (key,result[key]))
             except KeyError:
                 self.fail("Key '%s' not found in results." % key)
+
+    def test_end(self):
+        self.client.start('TestComponent', 'comp')
+        reply = self.client.end('comp')
+        self.assertEqual(reply, 'comp completed.\nObject comp ended.')
+
+        try:
+            self.client.end('froboz')
+        except Exception as err:
+            self.assertEqual(str(err),
+                         'no such object: <froboz>')
+
+        try:
+            self.client._send_recv('end')
+        except Exception as err:
+            self.assertEqual(str(err),
+                             'invalid syntax. Proper syntax:\n'
+                             'end <object>')
 
     def test_get_status(self):
         expected = {'comp': 'ready'}

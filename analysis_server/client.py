@@ -117,7 +117,7 @@ class Client(object):
         name: string
             Name of instance to unload.
         """
-        self._send_recv('end %s' % name)
+        return self._send_recv('end %s' % name)
 
     def execute(self, name, background=False):
         """
@@ -133,7 +133,7 @@ class Client(object):
         req = 'execute %s' % name
         if background:
             req += ' &'
-        self._send_recv(req)
+        return self._send_recv(req)
 
     def get(self, path):
         """
@@ -152,8 +152,7 @@ class Client(object):
 
     def get_direct_transfer(self):
         """ Return True if direct transfers are supported by the server. """
-        reply = self._send_recv('getDirectTransfer')
-        return reply == 'true'
+        return self._send_recv('getDirectTransfer') == 'true'
 
     def get_hierarchy(self, path, gzipped=False):
         """
@@ -220,7 +219,7 @@ class Client(object):
         """
         req = 'heartbeat '
         req += 'start' if start else 'stop'
-        self._send_recv(req)
+        return self._send_recv(req)
 
     def help(self):
         """ Help on Analysis Server commands as a list of strings. """
@@ -366,7 +365,7 @@ class Client(object):
         monitor_id: string
             Identifier of monitor to be stopped.
         """
-        self._send_recv('monitor stop %s' % monitor_id)
+        return self._send_recv('monitor stop %s' % monitor_id)
 
     def move(self, old, new):
         """
@@ -380,7 +379,7 @@ class Client(object):
         new: string
             New instance name.
         """
-        self._send_recv('move %s %s' % (old, new))
+        return self._send_recv('move %s %s' % (old, new))
 
     def ps(self, name):
         """
@@ -409,7 +408,7 @@ class Client(object):
     def quit(self):
         """ Close the connection. Implicitly ends all non-global instances. """
         try:
-            self._send_recv('quit')
+            return self._send_recv('quit')
         except EOFError:
             pass
 
@@ -423,7 +422,7 @@ class Client(object):
         valstr: string
             Value to set variable to in string form.
         """
-        self._send_recv('set %s = %s' % (path, valstr))
+        return self._send_recv('set %s = %s' % (path, valstr))
 
     def set_hierarchy(self, path, xml):
         """
@@ -435,11 +434,11 @@ class Client(object):
         xml: string
             XML describing values to be set.
         """
-        self._send_recv('setHierarchy %s %s' % (path, xml))
+        return self._send_recv('setHierarchy %s %s' % (path, xml))
 
     def set_mode_raw(self):
         """ Sets the connection into 'raw' mode. """
-        self._send_recv('setMode raw', raw=True)
+        return self._send_recv('setMode raw', raw=True)
 
     def start(self, path, name):
         """
@@ -451,7 +450,7 @@ class Client(object):
         name: string
             name for instance.
         """
-        self._send_recv('start %s %s' % (path, name))
+        return self._send_recv('start %s %s' % (path, name))
 
     def versions(self, path):
         """
