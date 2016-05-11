@@ -142,7 +142,7 @@ class TestCase(unittest.TestCase):
 
     def test_execute(self):
         self.client.start('TestComponent', 'comp')
-        #self.client.set('comp.in_file', 'Hello world!')
+        self.client.set('comp.in_file', 'Hello world!')
         self.client.execute('comp')
         self.client.execute('comp', background=True)
 

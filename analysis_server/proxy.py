@@ -30,6 +30,13 @@ class SystemWrapper(object):
     def run(self):
         self.problem.run()
 
+    def write(self, name, value):
+        fileref = self.system.params[name]
+        if isinstance(fileref, FileRef):
+            fileref.write(value)
+        else:
+            raise RuntimeError("'%s' is not a FileRef." % name)
+
     def get_abs_directory(self, name):
         val = self.get(name)
         if isinstance(val, FileRef):

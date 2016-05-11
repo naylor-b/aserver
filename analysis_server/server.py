@@ -299,10 +299,6 @@ class _Handler(SocketServer.BaseRequestHandler):
         else:
             self._logger = logging
 
-        # Set False during some testing for coverage check.
-        # Also avoids odd problems under nose suite test.
-        self._server_per_obj = True
-
         self._centerlink_dict = {}  # Used for testing 'setDictionary'.
 
     def handle(self):
@@ -561,8 +557,8 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
             wrapper, worker = self._instance_map.pop(name)
             wrapper.pre_delete()
             WorkerPool.release(worker)
-            if wrapper._server is not None:  # pragma no cover
-                wrapper._server.shutdown()
+            if wrapper._manager is not None:  # pragma no cover
+                wrapper._manager.shutdown()
         except KeyError:
             self._send_error('no such object: <%s>' % name)
         else:

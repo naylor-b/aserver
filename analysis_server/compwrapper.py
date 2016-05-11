@@ -61,7 +61,7 @@ class ComponentWrapper(object):
         self._name = name
         self._comp = proxy
         self._cfg = cfg
-        self._server = manager
+        self._manager = manager
         self._send_reply = send_reply
         self._send_exc = send_exc
         self._monitors = {}  # Maps from monitor_id to monitor.
@@ -105,7 +105,7 @@ class ComponentWrapper(object):
                 # Wrap it.
                 wrapper = wrapper_class(self._comp, int_path, epath, self._cfg)
                 if wrapper_class is FileWrapper:
-                    wrapper.set_server(self._server)
+                    wrapper.set_manager(self._manager)
                 self._wrappers[int_path] = wrapper
 
             attr = ext_attr or 'value'
@@ -288,21 +288,21 @@ class ComponentWrapper(object):
         """
         try:
             root = self._comp.get_abs_directory()
-            if self._server is None:  # Used when testing.
+            if self._manager is None:  # Used when testing.
                 paths = os.listdir(root)
                 paths = [path for path in paths
                               if not os.path.isdir(os.path.join(root, path))]
             else:  # pragma no cover
-                paths = self._server.listdir(root)
+                paths = self._manager.listdir(root)
                 paths = [path for path in paths
-                            if not self._server.isdir(os.path.join(root, path))]
+                            if not self._manager.isdir(os.path.join(root, path))]
             paths = [path for path in paths if not path.startswith('.')]
             text_files = []
             for path in paths:  # List only text files.
-                if self._server is None:  # Used when testing.
+                if self._manager is None:  # Used when testing.
                     inp = open(os.path.join(root, path), 'rb')
                 else:  # pragma no cover
-                    inp = self._server.open(os.path.join(root, path), 'rb')
+                    inp = self._manager.open(os.path.join(root, path), 'rb')
                 try:
                     data = inp.read(1 << 12)  # 4KB
                     if '\x00' not in data:
@@ -446,7 +446,7 @@ class ComponentWrapper(object):
         """
         try:
             path = os.path.join(self._comp.get_abs_directory(), path)
-            monitor = FileMonitor(self._server, path, 'r',
+            monitor = FileMonitor(self._manager, path, 'r',
                                   req_id, self._send_reply)
             monitor.start()
             self._monitors[str(req_id)] = monitor  # Monitor id is request id.

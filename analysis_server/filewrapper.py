@@ -25,7 +25,7 @@ class FileWrapper(VarWrapper):
 
     def __init__(self, sysproxy, name, ext_path, cfg):
         super(FileWrapper, self).__init__(sysproxy, name, ext_path, cfg)
-        self._server = None
+        self._manager = None
 
     @property
     def binary(self):
@@ -47,14 +47,14 @@ class FileWrapper(VarWrapper):
         """ AnalysisServer type string for value. """
         return 'com.phoenix_int.aserver.types.PHXRawFile'
 
-    def set_server(self, server):
+    def set_manager(self, manager):
         """
-        Set server to `server` for file operations.
+        Set manager to `manager` for file operations.
 
         server: proxy
             Proxy to the server hosting this file.
         """
-        self._server = server
+        self._manager = manager
         owner = self._sysproxy
         while owner is not None:
             if hasattr(owner, 'get_abs_directory'):
@@ -200,15 +200,7 @@ class FileWrapper(VarWrapper):
                     valstr = self._decode(valstr)
                 else:
                     valstr = valstr.strip('"').decode('string_escape')
-            mode = 'wb' if binary else 'w'
-            if self._server is None:  # Used during testing.
-                with open(filename, mode) as out:
-                    out.write(valstr)
-            else:  # pragma no cover
-                with self._server.open(filename, mode) as out:
-                    out.write(valstr)
-            file_ref = FileRef(filename)
-            self._sysproxy.set(self._name, file_ref)
+            self._sysproxy.write(self._name, valstr)
         elif attr in ('description', 'isBinary', 'mimeType',
                       'name', 'nameCoded', 'url'):
             raise RuntimeError('cannot set <%s>.' % path)
