@@ -1,5 +1,0 @@
-Mar 30 13:38:40 I root: Reading config file 'test/ExprComp.cfg'
-Mar 30 13:38:40 I root:     prepending '/home/bret/dev/new_aserver/analysis_server/test' to sys.path
-Mar 30 13:38:40 E root: Can't get class 'ExprComp' in 'ASTestComp': AttributeError("'module' object has no attribute 'ExprComp'",)
-Mar 30 13:38:40 I root: Reading config file 'test/TestComponent.cfg'
-Mar 30 13:38:40 I root:     prepending '/home/bret/dev/new_aserver/analysis_server/test' to sys.path

@@ -7,7 +7,7 @@ from inspect import getmembers, ismethod, isfunction
 
 from six import iteritems
 
-from analysis_server.wrapper import _find_var_wrapper
+from analysis_server.varwrapper import _find_var_wrapper
 from analysis_server.proxy import _setup_obj
 
 class _ConfigWrapper(object):
@@ -45,14 +45,14 @@ class _ConfigWrapper(object):
             fname = None
 
         self.filename = fname
-        
+
         if config.has_option(section, 'args'):
             args = [a.strip() for a in config.get(section, 'args').split()
                                    if a.strip()]
         else:
             args = []
 
-        p, instance = _setup_obj(section, fname, args=args)
+        p, instance = _setup_obj(section, 'comp', fname, args=args)
 
         # Check for optional diectory path.
         self.directory = directory = None

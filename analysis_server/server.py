@@ -57,11 +57,11 @@ from analysis_server.wrkpool import WorkerPool
 from analysis_server.publickey import make_private
 from analysis_server.mp_util import read_allowed_hosts
 from analysis_server.cfg_wrapper import _ConfigWrapper
-# from analysis_server.wrapper import ComponentWrapper, _find_var_wrapper
-# from analysis_server.filexfer import filexfer
-from analysis_server.proxy import _setup_obj, SystemWrapper, SysManager
+from analysis_server.compwrapper import ComponentWrapper
 
-DEFAULT_PORT = 1835
+# from analysis_server.filexfer import filexfer
+from analysis_server.proxy import SystemWrapper, SysManager
+
 ERROR_PREFIX = 'ERROR: '
 
 # Our version.
@@ -75,6 +75,20 @@ _AS_BUILD = '42968'
 _COMMANDS = {}
 
 _DBG_LEN = 10000  # Max length of debug log message.
+
+def get_open_address():
+    """Return an open address to use for a multiprocessing manager."""
+    if sys.platform == 'win32':
+        return arbitrary_address("AF_PIPE")
+    else:
+        s = socket.socket(socket.AF_INET)
+        s.bind(('localhost', 0))
+        addr = s.getsockname()
+        s.close()
+        return addr
+
+#DEFAULT_PORT = 1835
+DEFAULT_PORT = get_open_address()[1]
 
 class _ThreadedDictContextMgr(object):
     """ Share `dct` among multiple threads via the 'with' statement. """
@@ -165,20 +179,6 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     def config_errors(self):
         """ Number of configuration errors detected. """
         return self._config_errors
-
-    # def _read_comp_configurations(self):
-    #     """ Read component configuration files. """
-    #     for dirpath, dirnames, filenames in os.walk('.'):
-    #         for name in sorted(filenames):
-    #             if name.endswith('.cfg'):
-    #                 path = os.path.join(dirpath, name)
-    #                 path = path.lstrip('.').lstrip(os.sep)
-    #                 try:
-    #                     self.read_config(path)
-    #                 except Exception as exc:
-    #                     print(str(exc) or repr(exc))
-    #                     logging.error(str(exc) or repr(exc))
-    #                     self._config_errors += 1
 
     def read_config(self, path):
         """
@@ -374,7 +374,7 @@ version: %s""" % _VERSION)
         if self._hb is not None:
             self._hb.stop()
         for name in self._instance_map.keys():
-            self.__end(name)
+            self._end([name])
 
     def _get_component(self, typ):
         """
@@ -398,6 +398,35 @@ version: %s""" % _VERSION)
         self._send_error('component <%s> does not match a known component'
                          % typ)
         return None, None
+
+    def _get_proxy(self, name, background=False):
+        """
+        Return (proxy, worker) for component `name`.
+        If `background` and the request is not backgrounded, wait for
+        the normal worker to complete before returning the background
+        worker. This currently only occurs in the rare case of
+        ``execute comp &``.
+
+        name: string
+            Name of instance.
+
+        background: bool
+            Special background processing flag.
+        """
+        try:
+            wrapper, sync_worker = self._instance_map[name]
+        except KeyError:
+            self._send_error('no such object: <%s>' % name)
+            return (None, None)
+
+        if self._background:
+            worker = WorkerPool.get(one_shot=True)
+        else:
+            worker = sync_worker
+            if background:
+                worker.join()
+                worker = WorkerPool.get(one_shot=True)
+        return (wrapper, worker)
 
     def _send_reply(self, reply, req_id=None):
         """
@@ -529,72 +558,59 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
         name = args[0]
         try:
             self._logger.info('End %r', name)
-            proxy, worker, manager = self._instance_map.pop(name)
-            proxy.pre_delete()
+            wrapper, worker = self._instance_map.pop(name)
+            wrapper.pre_delete()
             WorkerPool.release(worker)
-            if manager is not None:  # pragma no cover
-                manager.shutdown()
+            if wrapper._server is not None:  # pragma no cover
+                wrapper._server.shutdown()
         except KeyError:
             self._send_error('no such object: <%s>' % name)
         else:
             self._send_reply("%s completed.\nObject %s ended.""" % (name, name))
 
-    def _help(self, args):
+    def _execute(self, args):
         """
-        Help on Analysis Server commands.
+        Runs a component instance.
 
         args: list[string]
             Arguments for the command.
         """
-        if len(args) != 0:
+        if len(args) < 1 or len(args) > 2:
             self._send_error('invalid syntax. Proper syntax:\n'
-                             'help,h')
+                             'execute,x <objectName>[&]')
             return
 
-        # As listed by Analysis Server version: 7.0, build: 42968.
-        self._send_reply("""\
-Available Commands:
-   listComponents,lc [category]
-   listCategories,la [category]
-   describe,d <category/component> [-xml]
-   setServerAuthInfo <serverURL> <username> <password> (NOT IMPLEMENTED)
-   start <category/component> <instanceName> [connector] [queue]
-   end <object>
-   execute,x <objectName>
-   listProperties,list,ls,l [object]
-   listGlobals,lg
-   listValues,lv <object>
-   listArrayValues,lav <object> (NOT IMPLEMENTED)
-   get <object.property>
-   set <object.property> = <value>
-   move,rename,mv,rn <from> <to> (NOT IMPLEMENTED)
-   getIcon <analysisComponent> (NOT IMPLEMENTED)
-   getIcon2 <analysisComponent> (NOT IMPLEMENTED)
-   getVersion
-   getLicense
-   getStatus
-   help,h
-   quit
-   getSysInfo
-   invoke <object.method()> [full]
-   listMethods,lm <object> [full]
-   addProxyClients <clientHost1>,<clientHost2>
-   monitor start <object.property>, monitor stop <id>
-   versions,v category/component
-   ps <object>
-   listMonitors,lo <objectName>
-   heartbeat,hb [start|stop]
-   listValuesURL,lvu <object>
-   getDirectTransfer
-   getByUrl <object.property> <url> (NOT IMPLEMENTED)
-   setByUrl <object.property> = <url> (NOT IMPLEMENTED)
-   setDictionary <xml dictionary string> (xml accepted, but not used)
-   getHierarchy <object.property>
-   setHierarchy <object.property> <xml>
-   deleteRunShare <key> (NOT IMPLEMENTED)
-   getBranchesAndTags (NOT IMPLEMENTED)
-   getQueues <category/component> [full] (NOT IMPLEMENTED)
-   setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
+        name = args[0]
+        if name.endswith('&'):
+            background = True
+            name = name[:-1]
+        elif len(args) > 1 and args[1] == '&':
+            background = True
+        else:
+            background = False
+
+        proxy, worker = self._get_proxy(name, background)
+        if proxy is not None:
+            worker.put((proxy.run, (self._req_id,), {}, None))
+
+    def _get(self, args):
+        """
+        Gets the value of a variable.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'get <object.property>')
+            return
+
+        name, _, path = args[0].partition('.')
+        print("getting NAME: %s" % name)
+        print("getting PATH: %s" % path)
+        proxy, worker = self._get_proxy(name)
+        if proxy is not None:
+            worker.put((proxy.get, (path, self._req_id), {}, None))
 
     def _get_status(self, args):
         """
@@ -678,6 +694,63 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
             lines.extend(sorted(comps.keys()))
         self._send_reply('\n'.join(lines))
 
+    def _help(self, args):
+        """
+        Help on Analysis Server commands.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'help,h')
+            return
+
+        # As listed by Analysis Server version: 7.0, build: 42968.
+        self._send_reply("""\
+Available Commands:
+   listComponents,lc [category]
+   listCategories,la [category]
+   describe,d <category/component> [-xml]
+   setServerAuthInfo <serverURL> <username> <password> (NOT IMPLEMENTED)
+   start <category/component> <instanceName> [connector] [queue]
+   end <object>
+   execute,x <objectName>
+   listProperties,list,ls,l [object]
+   listGlobals,lg
+   listValues,lv <object>
+   listArrayValues,lav <object> (NOT IMPLEMENTED)
+   get <object.property>
+   set <object.property> = <value>
+   move,rename,mv,rn <from> <to> (NOT IMPLEMENTED)
+   getIcon <analysisComponent> (NOT IMPLEMENTED)
+   getIcon2 <analysisComponent> (NOT IMPLEMENTED)
+   getVersion
+   getLicense
+   getStatus
+   help,h
+   quit
+   getSysInfo
+   invoke <object.method()> [full]
+   listMethods,lm <object> [full]
+   addProxyClients <clientHost1>,<clientHost2>
+   monitor start <object.property>, monitor stop <id>
+   versions,v category/component
+   ps <object>
+   listMonitors,lo <objectName>
+   heartbeat,hb [start|stop]
+   listValuesURL,lvu <object>
+   getDirectTransfer
+   getByUrl <object.property> <url> (NOT IMPLEMENTED)
+   setByUrl <object.property> = <url> (NOT IMPLEMENTED)
+   setDictionary <xml dictionary string> (xml accepted, but not used)
+   getHierarchy <object.property>
+   setHierarchy <object.property> <xml>
+   deleteRunShare <key> (NOT IMPLEMENTED)
+   getBranchesAndTags (NOT IMPLEMENTED)
+   getQueues <category/component> [full] (NOT IMPLEMENTED)
+   setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
+
     def _quit(self, args):
         """
         Close the connection.
@@ -691,6 +764,21 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
             return
 
         self._logger.info('Client quit')
+
+    def _set(self, args):
+        """
+        Sets the value of a variable.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        cmd, _, assignment = self._req.partition(' ')
+        lhs, _, rhs = assignment.partition('=')
+        name, _, path = lhs.strip().partition('.')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.set,
+                        (path, rhs.strip(), self._req_id), {}, None))
 
     def _start(self, args):
         """
@@ -726,41 +814,27 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
             manager = SysManager()
             manager.start()
             proxy = manager.SystemWrapper()
-            proxy.init(classname, cfg.filename, directory=directory)
-            proxy.set_name(name)
-
-            # if self._server_per_obj:  # pragma no cover
-            #     # Allocate a server.
-            #     server, server_info = RAM.allocate(resource_desc)
-            #     if server is None:
-            #         raise RuntimeError('Server allocation failed.')
-            #
-            #     obj = server.load_model(egg_name)
-            # else:  # Used for testing.
-            #     server = None
-            #     p, obj = _setup_obj(cfg.cfg_path, cfg.classname, directory)
-
-        #obj.name = name
+            proxy.init(classname, name, cfg.filename, directory=directory)
 
         # Create wrapper for component.
-        # wrapper = ComponentWrapper(name, obj, cfg, server, self._send_reply,
-        #                            self._send_exc, self._logger)
-        #self._instance_map[name] = (wrapper, WorkerPool.get())
-        self._instance_map[name] = (proxy, WorkerPool.get(), manager)
+        wrapper = ComponentWrapper(name, proxy, cfg, manager, self._send_reply,
+                                   self._send_exc)
+        self._instance_map[name] = (wrapper, WorkerPool.get())
         self._send_reply('Object %s started.' % name)
 
 
+    ########################################
+    # Telnet API command to method mapping
+    ########################################
 
-
-    # Telnet API
     # _COMMANDS['addProxyClients'] = _add_proxy_clients
     _COMMANDS['d'] = _describe
     _COMMANDS['describe'] = _describe
     _COMMANDS['end'] = _end
-    # _COMMANDS['execute'] = _execute
+    _COMMANDS['execute'] = _execute
     # _COMMANDS['getBranchesAndTags'] = _get_branches
     # _COMMANDS['getDirectTransfer'] = _get_direct_transfer
-    # _COMMANDS['get'] = _get
+    _COMMANDS['get'] = _get
     # _COMMANDS['getHierarchy'] = _get_hierarchy
     # _COMMANDS['getIcon2'] = _get_icon2
     # _COMMANDS['getIcon'] = _get_icon
@@ -806,11 +880,11 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
     # _COMMANDS['setMode'] = _set_mode
     # _COMMANDS['setRunQueue'] = _set_run_queue
     # _COMMANDS['setServerAuthInfo'] = _set_auth_info
-    # _COMMANDS['set'] = _set
+    _COMMANDS['set'] = _set
     _COMMANDS['start'] = _start
     # _COMMANDS['versions'] = _versions
     # _COMMANDS['v'] = _versions
-    # _COMMANDS['x'] = _execute
+    _COMMANDS['x'] = _execute
 
 
 
@@ -818,7 +892,7 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
 
 
 
-def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
+def start_server(address='localhost', port=None, allowed_hosts=None,
                  debug=False, args=()):
     """
     Start server process at `address` and `port`.
@@ -840,6 +914,9 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
     args: iter of str
         Other command line args to pass to server.
     """
+    if port is None:
+        port = get_open_address()[1]
+
     if allowed_hosts is None:
         allowed_hosts = ['127.0.0.1', socket.gethostname()]
     with open('hosts.allow', 'w') as out:
@@ -856,10 +933,12 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
         os.remove(server_up)
 
     # Start process.
-    args = ['python', server_path,
+    args = [sys.executable, server_path, '-d',
             '--address', address, '--port', '%d' % port, '--up', server_up] + args
     if debug:
         args.append('--debug')
+
+    print("starting ShellProc:",args)
     proc = ShellProc(args, stdout=server_out, stderr=STDOUT)
 
     # Wait for valid server_up file.
@@ -887,6 +966,8 @@ def start_server(address='localhost', port=DEFAULT_PORT, allowed_hosts=None,
         pid  = int(inp.readline().strip())
 
     os.remove(server_up)
+
+    print("returning",proc,port)
 
     return (proc, port)
 
@@ -983,7 +1064,8 @@ def main():  # pragma no cover
     # Create server.
     host = options.address or socket.gethostname()
     server = Server(host, options.port, allowed_hosts,
-                config_files=options.config, available_systems=options.system)
+                    config_files=options.config,
+                    available_systems=options.system)
     if server.config_errors:
         print('%d component configuration errors detected.'
                % server.config_errors)

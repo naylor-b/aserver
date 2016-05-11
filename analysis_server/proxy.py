@@ -7,15 +7,16 @@ import traceback
 from multiprocessing.managers import BaseManager, BaseProxy
 
 from openmdao.core.problem import Problem
+from openmdao.core.fileref import FileRef
 from openmdao.core.group import Group
 from openmdao.util.file_util import DirContext
 
 
 class SystemWrapper(object):
 
-    def init(self, classname, fpath=None, directory='', args=()):
-        self.problem, self.system = _setup_obj(classname, fpath, directory,
-                                               args=args)
+    def init(self, classname, instname, fpath=None, directory='', args=()):
+        self.problem, self.system = _setup_obj(classname, instname, fpath,
+                                               directory, args=args)
 
     def set(self, name, value):
         self.system.params[name] = value
@@ -25,6 +26,30 @@ class SystemWrapper(object):
             return self.system.unknowns[name]
         else:
             return self.system.params[name]
+
+    def run(self):
+        self.problem.run()
+
+    def get_abs_directory(self, name):
+        val = self.get(name)
+        if isinstance(val, FileRef):
+            return os.path.dirname(val._abspath())
+        else:
+            raise RuntimeError("'%s' is not a FileRef." % name)
+
+    def get_description(self, name):
+        if name in self.system.unknowns:
+            meta = self.system.unknowns._dat[name].meta
+        else:
+            meta = self.system.params._dat[name].meta
+        return meta.get('desc', '')
+
+    def get_metadata(self, name):
+        if name in self.system.unknowns:
+            meta = self.system.unknowns._dat[name].meta
+        else:
+            meta = self.system.params._dat[name].meta
+        return meta
 
     def set_name(self, name):
         self.system.name = name
@@ -39,7 +64,7 @@ class SysManager(BaseManager):
 SysManager.register('SystemWrapper', SystemWrapper)
 
 
-def _setup_obj(classname, filename=None, directory='', args=()):
+def _setup_obj(classname, instname, filename=None, directory='', args=()):
     # Get Python class and create instance.
 
     if filename is None:  # assume we can just import the class
@@ -76,15 +101,8 @@ def _setup_obj(classname, filename=None, directory='', args=()):
             raise RuntimeError("Can't instantiate %s.%s: %r"
                                % (modname, classname, exc))
 
-        if isinstance(obj, Group):
-            root = obj
-        else:
-            root = Group()
-
-        p = Problem(root=root)
-        if obj is not root:
-            root.add('comp', obj)
-
+        p = Problem(root=Group())
+        p.root.add(instname, obj)
         p.setup(check=False)
 
     return p, obj

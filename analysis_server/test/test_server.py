@@ -11,8 +11,6 @@ import getpass
 import time
 import glob
 
-from openmdao.util.file_util import build_directory
-
 from analysis_server.server import start_server, stop_server
 from analysis_server.client import Client
 
@@ -23,19 +21,24 @@ class TestCase(unittest.TestCase):
 
     def setUp(self):
         self.testdir = os.path.dirname(os.path.abspath(__file__))
-        self.tempdir = tempfile.mkdtemp()
+        self.tempdir = tempfile.mkdtemp(prefix='aserver-')
+
         os.makedirs(os.path.join(self.tempdir, 'd1'))
         os.makedirs(os.path.join(self.tempdir, 'd2/d3'))
 
-        shutil.copyfile(os.path.join(self.testdir, 'ASTestComp.py'),
-                       os.path.join(self.tempdir, 'd2', 'd3', 'ASTestComp.py'))
-        shutil.copyfile(os.path.join(self.testdir, 'TestComponents.cfg'),
-                       os.path.join(self.tempdir, 'd2', 'd3', 'TestComponents.cfg'))
+        shutil.copy(os.path.join(self.testdir, 'ASTestComp.py'),
+                    os.path.join(self.tempdir, 'd2', 'd3'))
+        shutil.copy(os.path.join(self.testdir, 'TestComponents.cfg'),
+                    os.path.join(self.tempdir, 'd2', 'd3'))
 
         os.chdir(self.tempdir)
 
-        self.server, self.port = start_server(args=['-c', 'd2/d3/TestComponents.cfg'])
-        self.client = Client(port=self.port)
+        try:
+            self.server, self.port = start_server(args=['-c', 'd2/d3/TestComponents.cfg'])
+            self.client = Client(port=self.port)
+        except:
+            os.chdir(STARTDIR)
+            raise
 
     def tearDown(self):
         try:
@@ -137,6 +140,17 @@ class TestCase(unittest.TestCase):
                              'invalid syntax. Proper syntax:\n'
                              'end <object>')
 
+    def test_execute(self):
+        self.client.start('TestComponent', 'comp')
+        #self.client.set('comp.in_file', 'Hello world!')
+        self.client.execute('comp')
+        self.client.execute('comp', background=True)
+
+    def test_get(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.get('comp.x')
+        self.assertEqual(result, '2')
+
     def test_get_status(self):
         expected = {'comp': 'ready'}
         self.client.start('TestComponent', 'comp')
@@ -222,6 +236,10 @@ version: 7.0, build: 42968"""
         self.assertEqual(sorted(result),
                          ['TestComponent',
                           'openmdao.components.exec_comp.ExecComp'])
+
+    def test_start(self):
+        reply = self.client.start('TestComponent', 'comp')
+        self.assertEqual("Object comp started.", reply)
 
 if __name__ == '__main__':
     unittest.main()
