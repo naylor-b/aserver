@@ -133,7 +133,7 @@ class ArrayBase(VarWrapper):
                ' description=%s units="%s">%s</Variable>' \
                % (self._ext_name, self._typstr, self._io, self._xml_desc(),
                   self.get('units', self._ext_path),
-                  escape(self.get('value', self._ext_path)))
+                  self.escape(self.get('value', self._ext_path)))
 
     def set(self, attr, path, valstr, gzipped):
         """

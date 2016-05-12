@@ -44,6 +44,8 @@ import threading
 import time
 import traceback
 
+from xml.sax.saxutils import escape
+
 if sys.platform != 'win32':
     import pwd
 
@@ -602,11 +604,63 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
             return
 
         name, _, path = args[0].partition('.')
-        print("getting NAME: %s" % name)
-        print("getting PATH: %s" % path)
         proxy, worker = self._get_proxy(name)
         if proxy is not None:
             worker.put((proxy.get, (path, self._req_id), {}, None))
+
+    def _get_branches(self, args):
+        """
+        Handler for ``getBranchesAndTags``.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getBranchesAndTags')
+            return
+
+        self._send_reply('')  # Not supported.
+
+    def _get_direct_transfer(self, args):
+        """
+        Return 'true' if we support direct file transfers.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getDirectTransfer')
+            return
+
+        self._send_reply('false')
+
+    def _get_hierarchy(self, args):
+        """
+        Get hierarchy of values in component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getHierarchy <object> [gzipData]')
+            return
+
+        if len(args) == 2:
+            if args[1] == 'gzipData':
+                gzip = True
+            else:
+                self._send_error('invalid syntax. Proper syntax:\n'
+                                 'getHierarchy <object> [gzipData]')
+                return
+        else:
+            gzip = False
+
+        wrapper, worker = self._get_proxy(args[0])
+        if wrapper is not None:
+            worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
 
     def _get_status(self, args):
         """
@@ -776,6 +830,34 @@ Available Commands:
             worker.put((wrapper.set,
                         (path, rhs.strip(), self._req_id), {}, None))
 
+    def _set_hierarchy(self, args):
+        """
+        Set hierarchy of variable values in component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        cmd, _, rest = self._req.partition(' ')
+        name, _, xml = rest.partition(' ')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.set_hierarchy, (xml, self._req_id), {}, None))
+
+    def _set_mode(self, args):
+        """
+        Sets the connection into 'raw' mode.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1 or args[0] != 'raw':
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'setMode raw')
+            return
+
+        self._raw = True
+        self._stream.raw = True
+
     def _start(self, args):
         """
         Creates a new component instance.
@@ -828,10 +910,10 @@ Available Commands:
     _COMMANDS['describe'] = _describe
     _COMMANDS['end'] = _end
     _COMMANDS['execute'] = _execute
-    # _COMMANDS['getBranchesAndTags'] = _get_branches
-    # _COMMANDS['getDirectTransfer'] = _get_direct_transfer
+    _COMMANDS['getBranchesAndTags'] = _get_branches
+    _COMMANDS['getDirectTransfer'] = _get_direct_transfer
     _COMMANDS['get'] = _get
-    # _COMMANDS['getHierarchy'] = _get_hierarchy
+    _COMMANDS['getHierarchy'] = _get_hierarchy
     # _COMMANDS['getIcon2'] = _get_icon2
     # _COMMANDS['getIcon'] = _get_icon
     # _COMMANDS['getLicense'] = _get_license
@@ -872,8 +954,8 @@ Available Commands:
     # _COMMANDS['rename'] = _move
     # _COMMANDS['rn'] = _move
     # _COMMANDS['setDictionary'] = _set_dictionary
-    # _COMMANDS['setHierarchy'] = _set_hierarchy
-    # _COMMANDS['setMode'] = _set_mode
+    _COMMANDS['setHierarchy'] = _set_hierarchy
+    _COMMANDS['setMode'] = _set_mode
     # _COMMANDS['setRunQueue'] = _set_run_queue
     # _COMMANDS['setServerAuthInfo'] = _set_auth_info
     _COMMANDS['set'] = _set
@@ -934,7 +1016,7 @@ def start_server(address='localhost', port=None, allowed_hosts=None,
     if debug:
         args.append('--debug')
 
-    print("starting ShellProc:",args)
+    #print("starting ShellProc:",args)
     proc = ShellProc(args, stdout=server_out, stderr=STDOUT)
 
     # Wait for valid server_up file.
@@ -962,8 +1044,6 @@ def start_server(address='localhost', port=None, allowed_hosts=None,
         pid  = int(inp.readline().strip())
 
     os.remove(server_up)
-
-    print("returning",proc,port)
 
     return (proc, port)
 

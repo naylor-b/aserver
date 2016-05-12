@@ -151,6 +151,18 @@ class TestCase(unittest.TestCase):
         result = self.client.get('comp.x')
         self.assertEqual(result, '2')
 
+    def test_get_branches(self):
+        result = self.client.get_branches_and_tags()
+        self.assertEqual(result, '')
+
+    def test_get_direct(self):
+        result = self.client.get_direct_transfer()
+        self.assertFalse(result)
+
+    def test_get_hierarchy(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.get_hierarchy('comp')
+
     def test_get_status(self):
         expected = {'comp': 'ready'}
         self.client.start('TestComponent', 'comp')
@@ -236,6 +248,58 @@ version: 7.0, build: 42968"""
         self.assertEqual(sorted(result),
                          ['TestComponent',
                           'openmdao.components.exec_comp.ExecComp'])
+
+#     def test_set_hierarchy(self):
+#         reply = self.client.start('TestComponent', 'comp')
+#         # Grab value of obj_input (big XML string).
+#         reply = self.client.get('comp.obj_input')
+#         obj_input = reply[:-3]
+#
+#         xml = """\
+# <?xml version='1.0' encoding='utf-8'?>
+# <Group>
+# <Variable name="in_file">test setHierarchy</Variable>
+# <Variable name="obj_input">%s</Variable>
+# <Variable name="sub_group.b">false</Variable>
+# <Variable name="sub_group.f">-0.5</Variable>
+# <Variable name="sub_group.f1d">5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9</Variable>
+# <Variable name="sub_group.f2d">bounds[2, 4] {.1, .2, .3, .4, .5, .6, .7, .8}</Variable>
+# <Variable name="sub_group.f3d">bounds[2, 3, 3] {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9</Variable>
+# <Variable name="sub_group.fe">3.14159</Variable>
+# <Variable name="sub_group.i">-7</Variable>
+# <Variable name="sub_group.i1d">-1, -2, -3, -4, -5, -6, -7, -8, -9</Variable>
+# <Variable name="sub_group.ie">9</Variable>
+# <Variable name="sub_group.s">Cruel world :-(</Variable>
+# <Variable name="sub_group.se">hot</Variable>
+# <Variable name="x">6</Variable>
+# <Variable name="y">7</Variable>
+# </Group>""" % escape(obj_input)
+#
+#         cmd_1 = 'start ASTestComp comp'
+#         cmd_2 = 'setHierarchy comp %s' % xml
+#         expected = 'values set'
+#         replies = self.send_recv(['setMode raw\n',
+#                                   'setID 1\ncmdLen=%d\n%s' % (len(cmd_1), cmd_1),
+#                                   'setID 2\ncmdLen=%d\n%s' % (len(cmd_2), cmd_2)],
+#                                  raw=True, count=3)
+#         self.assertEqual(replies[-1], '2\r\nformat: string\r\n%d\r\n%s'
+#                                       % (len(expected), expected))
+
+    def test_set_mode(self):
+        self.client.set_mode_raw()
+        result = self.client.list_components()
+        self.assertEqual(result, ['TestComponent',
+                                  'openmdao.components.exec_comp.ExecComp'])
+
+        self.assertTrue(self.client._stream.raw)
+
+        try:
+            self.client._stream.raw = False
+        except Exception as err:
+            self.assertEqual("Can only transition from 'cooked' to 'raw'",
+                             str(err))
+        else:
+            self.fail("Exception expected")
 
     def test_start(self):
         reply = self.client.start('TestComponent', 'comp')

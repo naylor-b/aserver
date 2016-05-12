@@ -158,7 +158,7 @@ class FileWrapper(VarWrapper):
                 chunks.append('')
                 data = '\n'.join(chunks)
         else:
-            data = escape(self.get('value', self._ext_path))
+            data = self.escape(self.get('value', self._ext_path))
 
         return '<Variable name="%s" type="file" io="%s" description=%s' \
                ' isBinary="%s" fileName="%s"%s>%s</Variable>' \

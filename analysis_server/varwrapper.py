@@ -3,6 +3,7 @@ Variable wrappers are created on demand when a wrapped component's variable
 is referenced.
 """
 
+import logging
 from xml.sax.saxutils import escape, quoteattr
 
 # Mapping from OpenMDAO variable type to wrapper type.
@@ -68,6 +69,7 @@ class VarWrapper(object):
         self._access = 'sg' if name in cfg.inputs else 'g'
         self._io = 'input' if name in cfg.inputs  else 'output'
         self._meta = sysproxy.get_metadata(name)
+        self._logger = logging.getLogger(name)
 
     @property
     def phx_access(self):
@@ -107,4 +109,7 @@ class VarWrapper(object):
             raise RuntimeError('no such property <%s>.' % path)
 
     def _xml_desc(self):
-        return quoteattr(self.get('description', self._ext_path))
+        return quoteattr(self._meta.get('desc', self._ext_path))
+
+    def escape(self, s):
+        return escape(s)

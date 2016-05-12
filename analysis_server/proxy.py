@@ -27,6 +27,9 @@ class SystemWrapper(object):
         else:
             return self.system.params[name]
 
+    def get_pathname(self):
+        return self.system.pathname
+        
     def run(self):
         self.problem.run()
 

@@ -65,7 +65,7 @@ from analysis_server.varwrapper import VarWrapper, _register
 #         return '<Variable name="%s" type="object" io="%s"' \
 #                ' description=%s>%s</Variable>' \
 #                % (self._ext_name, self._io, self._xml_desc(),
-#                   escape(self.get('value', self._ext_path)))
+#                   self.escape(self.get('value', self._ext_path)))
 #
 #     def set(self, attr, path, valstr, gzipped):
 #         """

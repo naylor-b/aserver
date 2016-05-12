@@ -144,8 +144,8 @@ class TopObj(VariableTree):
         self.add('tos1d', ['Hello', 'from', 'TestComponent.tos1d'],
                  desc='1D string array')
 
-        self.add('toflst', [], desc='Float list')
-        self.add('toilst', [], desc='Int list')
+        self.add('toflst', [], desc='Float list', element_type=float)
+        self.add('toilst', [], desc='Int list', element_type=int)
 
         SubObj('sobobj').add_to(self)
 
@@ -189,8 +189,8 @@ class SubGroup(Container):
                                     dtype=str),
                  iotype='in', desc='1D string array')
 
-        self.add('flst', [], iotype='in', desc='List of floats')
-        self.add('ilst', [], iotype='in', desc='List of ints')
+        self.add('flst', [], iotype='in', desc='List of floats', element_type=float)
+        self.add('ilst', [], iotype='in', desc='List of ints', element_type=int)
 
 
 class Bogus(object):

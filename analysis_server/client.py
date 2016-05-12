@@ -61,11 +61,11 @@ class Client(object):
         """
         with self._lock:
             if self._raw:
-                print("RAW", request)
+                #print("RAW", request)
                 self._curr_id += 1
                 self._stream.send_request(request, self._curr_id)
             else:
-                print("COOKED", request)
+                #print("COOKED", request)
                 self._stream.send_request(request)
 
             if raw:  # No reply if switching to raw mode

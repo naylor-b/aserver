@@ -2,6 +2,7 @@
 from analysis_server.varwrapper import VarWrapper, _register
 from analysis_server.arrwrapper import ArrayBase
 
+
 class ListWrapper(ArrayBase):
     """
     Wrapper for `List` providing double[], long[], or String[] interface.
@@ -22,17 +23,31 @@ class ListWrapper(ArrayBase):
     def __init__(self, sysproxy, name, ext_path, cfg):
         lst = sysproxy.get(name)
 
-        if lst:
+        if lst is not None:
             types = set()
             for l in lst:
                 types.add(type(l))
 
-            allowed = set((float, int, str))
+            if len(types) > 1:
+                raise TypeError('%s.%s: only one List element type is allowed. '
+                                'This list has types: %s'
+                                 % (sysproxy.get_pathname(), name, list(types)))
 
-            for t in types:
-                if t not in allowed:
-                    raise TypeError('%s.%s: unsupported List element type %r'
-                                     % (sysproxy.get_pathname(), name, t))
+            try:
+                typ = types.pop()
+            except KeyError:
+                meta = sysproxy.get_metadata(name)
+                if 'element_type' in meta:
+                    typ = meta['element_type']
+                else:
+                    raise TypeError("%s.%s: list is empty. For empty lists, you "
+                                    "must store 'element_type' in the list's "
+                                    "metadata."
+                                     % (sysproxy.get_pathname(), name))
+
+            if typ not in (float, int, str):
+                raise TypeError('%s.%s: unsupported List element type %s'
+                                 % (sysproxy.get_pathname(), name, typ))
         else:
             raise TypeError('%s.%s: undefined List element type'
                             % (sysproxy.get_pathname(), name))

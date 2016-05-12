@@ -7,6 +7,7 @@ import time
 import logging
 
 import xml.etree.cElementTree as ElementTree
+from xml.sax.saxutils import escape
 
 try:
     import resource
@@ -175,7 +176,7 @@ class ComponentWrapper(object):
             lines.append("<?xml version='1.0' encoding='utf-8'?>")
             lines.append('<Group>')
             for path in sorted(self._cfg.properties.keys()):
-                wrapper, attr = self._get_var_wrapper(path)
+                vwrapper, attr = self._get_var_wrapper(path)
                 prefix, _, name = path.rpartition('.')
                 if prefix != group:
                     while not prefix.startswith(group):  # Exit subgroups.
@@ -189,9 +190,9 @@ class ComponentWrapper(object):
                         lines.append('<Group name="%s">' % name)
                     group = prefix
                 try:
-                    lines.append(wrapper.get_as_xml(gzipped))
+                    lines.append(vwrapper.get_as_xml(gzipped))
                 except Exception as exc:
-                    raise type(exc)("Can't get %r: %s" % (path, exc))
+                    raise type(exc)("Can't get %r: %s %s" % (path, vwrapper,exc))
             lines.append('</Group>')
             self._send_reply('\n'.join(lines), req_id)
         except Exception as exc:
