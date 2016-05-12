@@ -61,11 +61,9 @@ class Client(object):
         """
         with self._lock:
             if self._raw:
-                #print("RAW", request)
                 self._curr_id += 1
                 self._stream.send_request(request, self._curr_id)
             else:
-                #print("COOKED", request)
                 self._stream.send_request(request)
 
             if raw:  # No reply if switching to raw mode
@@ -156,20 +154,20 @@ class Client(object):
         """ Return True if direct transfers are supported by the server. """
         return self._send_recv('getDirectTransfer') == 'true'
 
-    def get_hierarchy(self, path, gzipped=False):
-        """
-        Return all interface variable information for `path` as XML.
-
-        path: string
-            Path to component instance.
-
-        gzipped: bool
-            If True, returned string is in gzip form.
-        """
-        gzipped = ' gzipData' if gzipped else ''
-        reply = self._send_recv('getHierarchy %s%s' % (path, gzipped))
-# TODO: Pythonic return value.
-        return reply
+#     def get_hierarchy(self, path, gzipped=False):
+#         """
+#         Return all interface variable information for `path` as XML.
+#
+#         path: string
+#             Path to component instance.
+#
+#         gzipped: bool
+#             If True, returned string is in gzip form.
+#         """
+#         gzipped = ' gzipData' if gzipped else ''
+#         reply = self._send_recv('getHierarchy %s%s' % (path, gzipped))
+# # TODO: Pythonic return value.
+#         return reply
 
     def get_icon(self, path):
         """
@@ -426,18 +424,18 @@ class Client(object):
         """
         return self._send_recv('set %s = %s' % (path, valstr))
 
-    def set_hierarchy(self, path, xml):
-        """
-        Set multiple variable values from `xml` data.
-
-        path:
-            Path to component instance.
-
-        xml: string
-            XML describing values to be set.
-        """
-        return self._send_recv('setHierarchy %s %s' % (path, xml))
-
+    # def set_hierarchy(self, path, xml):
+    #     """
+    #     Set multiple variable values from `xml` data.
+    #
+    #     path:
+    #         Path to component instance.
+    #
+    #     xml: string
+    #         XML describing values to be set.
+    #     """
+    #     return self._send_recv('setHierarchy %s %s' % (path, xml))
+    #
     def set_mode_raw(self):
         """ Sets the connection into 'raw' mode. """
         return self._send_recv('setMode raw', raw=True)

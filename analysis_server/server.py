@@ -359,7 +359,7 @@ version: %s""" % _VERSION)
                     try:
                         cmd(self, args[1:])
                     except Exception as exc:
-                        self._send_exc()
+                        self._send_exc(exc)
 
                 except EOFError:
                     break
@@ -471,7 +471,7 @@ version: %s""" % _VERSION)
         with self._lock:
             self._stream.send_reply(reply, req_id, 'error')
 
-    def _send_exc(self, req_id=None):
+    def _send_exc(self, exc, req_id=None):
         """
         Send exception reply to client, with optional logging.
 
@@ -481,7 +481,7 @@ version: %s""" % _VERSION)
         req_id: string
             Request ID, if requested in 'raw' mode.
         """
-        self._send_error(traceback.format_exc(), req_id)
+        self._send_error('Exception: %r' % exc, req_id)
         self._logger.error(traceback.format_exc())
 
     ######################################
@@ -636,31 +636,31 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
 
         self._send_reply('false')
 
-    def _get_hierarchy(self, args):
-        """
-        Get hierarchy of values in component.
-
-        args: list[string]
-            Arguments for the command.
-        """
-        if len(args) < 1 or len(args) > 2:
-            self._send_error('invalid syntax. Proper syntax:\n'
-                             'getHierarchy <object> [gzipData]')
-            return
-
-        if len(args) == 2:
-            if args[1] == 'gzipData':
-                gzip = True
-            else:
-                self._send_error('invalid syntax. Proper syntax:\n'
-                                 'getHierarchy <object> [gzipData]')
-                return
-        else:
-            gzip = False
-
-        wrapper, worker = self._get_proxy(args[0])
-        if wrapper is not None:
-            worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
+    # def _get_hierarchy(self, args):
+    #     """
+    #     Get hierarchy of values in component.
+    #
+    #     args: list[string]
+    #         Arguments for the command.
+    #     """
+    #     if len(args) < 1 or len(args) > 2:
+    #         self._send_error('invalid syntax. Proper syntax:\n'
+    #                          'getHierarchy <object> [gzipData]')
+    #         return
+    #
+    #     if len(args) == 2:
+    #         if args[1] == 'gzipData':
+    #             gzip = True
+    #         else:
+    #             self._send_error('invalid syntax. Proper syntax:\n'
+    #                              'getHierarchy <object> [gzipData]')
+    #             return
+    #     else:
+    #         gzip = False
+    #
+    #     wrapper, worker = self._get_proxy(args[0])
+    #     if wrapper is not None:
+    #         worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
 
     def _get_status(self, args):
         """
@@ -801,6 +801,37 @@ Available Commands:
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
 
+    def _move(self, args):
+        """
+        Moves or renames a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'move,rename,mv,rn <from> <to>')
+            return
+
+        raise NotImplementedError('move')
+
+    def _ps(self, args):
+        """
+        Lists all running processes for a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'ps <object>')
+            return
+
+        name = args[0].strip('"')
+        proxy, worker = self._get_proxy(name)
+        if proxy is not None:
+            worker.put((proxy.ps, (self._req_id,), {}, None))
+
     def _quit(self, args):
         """
         Close the connection.
@@ -830,19 +861,19 @@ Available Commands:
             worker.put((wrapper.set,
                         (path, rhs.strip(), self._req_id), {}, None))
 
-    def _set_hierarchy(self, args):
-        """
-        Set hierarchy of variable values in component.
-
-        args: list[string]
-            Arguments for the command.
-        """
-        cmd, _, rest = self._req.partition(' ')
-        name, _, xml = rest.partition(' ')
-        wrapper, worker = self._get_proxy(name)
-        if wrapper is not None:
-            worker.put((wrapper.set_hierarchy, (xml, self._req_id), {}, None))
-
+    # def _set_hierarchy(self, args):
+    #     """
+    #     Set hierarchy of variable values in component.
+    #
+    #     args: list[string]
+    #         Arguments for the command.
+    #     """
+    #     cmd, _, rest = self._req.partition(' ')
+    #     name, _, xml = rest.partition(' ')
+    #     wrapper, worker = self._get_proxy(name)
+    #     if wrapper is not None:
+    #         worker.put((wrapper.set_hierarchy, (xml, self._req_id), {}, None))
+    #
     def _set_mode(self, args):
         """
         Sets the connection into 'raw' mode.
@@ -900,6 +931,31 @@ Available Commands:
         self._instance_map[name] = (wrapper, WorkerPool.get())
         self._send_reply('Object %s started.' % name)
 
+    def _versions(self, args):
+        """
+        Lists the version history of a component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'versions,v category/component')
+            return
+
+        cfg, directory = self._get_component(args[0])
+        if cfg is None:
+            return
+
+        xml = ["<Branch name='HEAD'>"]
+        xml.append(" <Version name='%s'>" % cfg.version)
+        xml.append("  <author>%s</author>" % escape(cfg.author))
+        xml.append("  <date>%s</date>" % cfg.timestamp)
+        xml.append("  <description>%s</description>" % escape(cfg.comment))
+        xml.append(" </Version>")
+        xml.append("</Branch>")
+        self._send_reply('\n'.join(xml))
+
 
     ########################################
     # Telnet API command to method mapping
@@ -913,7 +969,7 @@ Available Commands:
     _COMMANDS['getBranchesAndTags'] = _get_branches
     _COMMANDS['getDirectTransfer'] = _get_direct_transfer
     _COMMANDS['get'] = _get
-    _COMMANDS['getHierarchy'] = _get_hierarchy
+    #_COMMANDS['getHierarchy'] = _get_hierarchy
     # _COMMANDS['getIcon2'] = _get_icon2
     # _COMMANDS['getIcon'] = _get_icon
     # _COMMANDS['getLicense'] = _get_license
@@ -947,21 +1003,21 @@ Available Commands:
     # _COMMANDS['lv'] = _list_values
     # _COMMANDS['lvu'] = _list_values_url
     # _COMMANDS['monitor'] = _monitor
-    # _COMMANDS['move'] = _move
-    # _COMMANDS['mv'] = _move
-    # _COMMANDS['ps'] = _ps
+    _COMMANDS['move'] = _move
+    _COMMANDS['mv'] = _move
+    _COMMANDS['ps'] = _ps
     _COMMANDS['quit'] = _quit
     # _COMMANDS['rename'] = _move
     # _COMMANDS['rn'] = _move
     # _COMMANDS['setDictionary'] = _set_dictionary
-    _COMMANDS['setHierarchy'] = _set_hierarchy
+    #_COMMANDS['setHierarchy'] = _set_hierarchy
     _COMMANDS['setMode'] = _set_mode
     # _COMMANDS['setRunQueue'] = _set_run_queue
     # _COMMANDS['setServerAuthInfo'] = _set_auth_info
     _COMMANDS['set'] = _set
     _COMMANDS['start'] = _start
-    # _COMMANDS['versions'] = _versions
-    # _COMMANDS['v'] = _versions
+    _COMMANDS['versions'] = _versions
+    _COMMANDS['v'] = _versions
     _COMMANDS['x'] = _execute
 
 

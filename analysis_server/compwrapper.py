@@ -2,6 +2,7 @@
 Component wrappers are created by the ``start`` command after the associated
 component's server has been started.
 """
+import os
 import sys
 import time
 import logging
@@ -142,7 +143,7 @@ class ComponentWrapper(object):
             finally:
                 self._start = None
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def get(self, path, req_id):
         """
@@ -158,7 +159,7 @@ class ComponentWrapper(object):
             wrapper, attr = self._get_var_wrapper(path)
             self._send_reply(wrapper.get(attr, path), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def get_hierarchy(self, req_id, gzipped):
         """
@@ -196,7 +197,7 @@ class ComponentWrapper(object):
             lines.append('</Group>')
             self._send_reply('\n'.join(lines), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def invoke(self, method, full, req_id):
         """
@@ -240,7 +241,7 @@ class ComponentWrapper(object):
 
             self._send_reply(reply, req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def list_array_values(self, path, req_id):
         """
@@ -255,7 +256,7 @@ class ComponentWrapper(object):
         try:
             raise NotImplementedError('listArrayValues')
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def list_methods(self, full, req_id):
         """
@@ -278,7 +279,7 @@ class ComponentWrapper(object):
             lines[0] = '%d methods found:' % (len(lines)-1)
             self._send_reply('\n'.join(lines), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def list_monitors(self, req_id):
         """
@@ -314,7 +315,7 @@ class ComponentWrapper(object):
             lines.extend(sorted(text_files))
             self._send_reply('\n'.join(lines), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def list_properties(self, path, req_id):
         """
@@ -330,7 +331,7 @@ class ComponentWrapper(object):
         try:
             self._send_reply(self._list_properties(path), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def _list_properties(self, path):
         """
@@ -419,7 +420,7 @@ class ComponentWrapper(object):
                                          % (name, typ, access, len(val), val))
             self._send_reply('\n'.join(lines), req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def list_values_url(self, path, req_id):
         """
@@ -452,7 +453,7 @@ class ComponentWrapper(object):
             monitor.start()
             self._monitors[str(req_id)] = monitor  # Monitor id is request id.
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def stop_monitor(self, monitor_id, req_id):
         """
@@ -540,7 +541,7 @@ class ComponentWrapper(object):
 
             self._send_reply(reply, req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def set(self, path, valstr, req_id):
         """
@@ -562,7 +563,7 @@ class ComponentWrapper(object):
             self._set(path, valstr)
             self._send_reply('value set for <%s>' % path, req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)
 
     def _set(self, path, valstr, gzipped=False):
         """
@@ -607,4 +608,4 @@ class ComponentWrapper(object):
                                     % (var.attrib['name'], valstr[:1000], exc))
             self._send_reply('values set', req_id)
         except Exception as exc:
-            self._send_exc(req_id)
+            self._send_exc(exc, req_id)

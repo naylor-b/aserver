@@ -45,33 +45,12 @@ class TestCase(unittest.TestCase):
             self.client.quit()
             stop_server(self.server)
         finally:
-            # if os.path.exists('openmdao_log.txt'):
-            #     with open('openmdao_log.txt', 'r') as f:
-            #         print (f.read())
-            # if os.path.exists('as-1835.out'):
-            #     with open('as-1835.out', 'r') as f:
-            #         print (f.read())
             os.chdir(STARTDIR)
             if not os.environ.get('OPENMDAO_KEEPDIRS'):
                 try:
                     shutil.rmtree(self.tempdir)
                 except OSError:
                     pass
-
-    # def send_recv(self, cmd, raw=False, count=None):
-    #     """ Set request, process, return replies. """
-    #     self.client.set_command(cmd, raw)
-    #     self.handler.handle()
-    #     replies = self.client.get_replies()
-    #     if count is not None:
-    #         retries = 0
-    #         while len(replies) < count:
-    #             retries += 1
-    #             if retries >= 100:
-    #                 break
-    #             time.sleep(0.1)
-    #         replies = self.client.get_replies()
-    #     return replies
 
     def compare(self, reply, expected):
         reply_lines = reply.split('\n')
@@ -132,6 +111,8 @@ class TestCase(unittest.TestCase):
         except Exception as err:
             self.assertEqual(str(err),
                          'no such object: <froboz>')
+        else:
+            self.fail("Exception expected")
 
         try:
             self.client._send_recv('end')
@@ -139,6 +120,8 @@ class TestCase(unittest.TestCase):
             self.assertEqual(str(err),
                              'invalid syntax. Proper syntax:\n'
                              'end <object>')
+        else:
+            self.fail("Exception expected")
 
     def test_execute(self):
         self.client.start('TestComponent', 'comp')
@@ -159,10 +142,10 @@ class TestCase(unittest.TestCase):
         result = self.client.get_direct_transfer()
         self.assertFalse(result)
 
-    def test_get_hierarchy(self):
-        self.client.start('TestComponent', 'comp')
-        result = self.client.get_hierarchy('comp')
-
+    # def test_get_hierarchy(self):
+    #     self.client.start('TestComponent', 'comp')
+    #     result = self.client.get_hierarchy('comp')
+    #
     def test_get_status(self):
         expected = {'comp': 'ready'}
         self.client.start('TestComponent', 'comp')
@@ -250,8 +233,8 @@ version: 7.0, build: 42968"""
                           'openmdao.components.exec_comp.ExecComp'])
 
 #     def test_set_hierarchy(self):
-#         reply = self.client.start('TestComponent', 'comp')
 #         # Grab value of obj_input (big XML string).
+#         reply = self.client.start('TestComponent', 'comp')
 #         reply = self.client.get('comp.obj_input')
 #         obj_input = reply[:-3]
 #
@@ -275,15 +258,37 @@ version: 7.0, build: 42968"""
 # <Variable name="y">7</Variable>
 # </Group>""" % escape(obj_input)
 #
-#         cmd_1 = 'start ASTestComp comp'
-#         cmd_2 = 'setHierarchy comp %s' % xml
+#         self.client.set_mode_raw()
+#         reply = self.client.set_hierarchy('comp', xml)
 #         expected = 'values set'
-#         replies = self.send_recv(['setMode raw\n',
-#                                   'setID 1\ncmdLen=%d\n%s' % (len(cmd_1), cmd_1),
-#                                   'setID 2\ncmdLen=%d\n%s' % (len(cmd_2), cmd_2)],
-#                                  raw=True, count=3)
-#         self.assertEqual(replies[-1], '2\r\nformat: string\r\n%d\r\n%s'
+#         self.assertEqual(reply, '2\r\nformat: string\r\n%d\r\n%s'
 #                                       % (len(expected), expected))
+    def test_move(self):
+        try:
+            self.client.move('from', 'to')
+        except Exception as err:
+            self.assertEqual(str(err), "Exception: NotImplementedError('move',)")
+        else:
+            self.fail("Exception expected")
+
+    def test_ps(self):
+        expected = [{
+            'PID': 0,
+            'ParentPID': 0,
+            'PercentCPU': 0.,
+            'Memory': 0,
+            'Time': 0.,
+            'WallTime': 0.,
+            'Command': os.path.basename(sys.executable),
+        }]
+        self.client.start('TestComponent', 'comp')
+        process_info = self.client.ps('comp')
+        self.assertEqual(process_info, expected)
+
+    def test_set(self):
+        self.client.start('TestComponent', 'comp')
+        self.client.set('comp.x', '42')
+        self.assertEqual(self.client.get('comp.x'), '42')
 
     def test_set_mode(self):
         self.client.set_mode_raw()
@@ -304,6 +309,28 @@ version: 7.0, build: 42968"""
     def test_start(self):
         reply = self.client.start('TestComponent', 'comp')
         self.assertEqual("Object comp started.", reply)
+
+    def test_versions(self):
+
+        reply = self.client.versions('TestComponent')
+        self.assertEqual(reply, ['0.2'])
+
+        try:
+            reply = self.client._send_recv('versions')
+        except Exception as err:
+            self.assertEqual(str(err),
+                            'invalid syntax. Proper syntax:\n'
+                            'versions,v category/component')
+        else:
+            self.fail("Exception expected")
+
+        try:
+            reply = self.client._send_recv('versions NoSuchComp')
+        except Exception as err:
+            self.assertEqual(str(err),
+                  "component </NoSuchComp> does not match a known component")
+        else:
+            self.fail("Exception expected")
 
 if __name__ == '__main__':
     unittest.main()
