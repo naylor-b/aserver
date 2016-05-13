@@ -146,6 +146,19 @@ class TestCase(unittest.TestCase):
     #     self.client.start('TestComponent', 'comp')
     #     result = self.client.get_hierarchy('comp')
     #
+
+    def test_get_icon(self):
+        try:
+            self.client.get_icon('TestComponent')
+        except Exception as err:
+            self.assertEqual(str(err), "Exception: NotImplementedError('getIcon',)")
+        else:
+            self.fail("Exception expected")
+
+    def test_get_license(self):
+        result = self.client.get_license()
+        self.assertEqual(result, 'Use at your own risk!')
+
     def test_get_status(self):
         expected = {'comp': 'ready'}
         self.client.start('TestComponent', 'comp')
@@ -223,6 +236,18 @@ version: 7.0, build: 42968"""
         ]
         result = self.client.help()
         self.assertEqual(result, expected)
+
+    def test_invoke(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.invoke('comp.reinitialize')
+        self.assertEqual(result, '')
+        result = self.client.invoke('comp.float_method')
+        self.assertEqual(result, '5')
+        result = self.client.invoke('comp.null_method')
+        self.assertEqual(result, '')
+        result = self.client.invoke('comp.str_method')
+        self.assertEqual(result,
+                         'current state: x 2.0, y 3.0, z 0.0, exe_count 0')
 
     def test_list_components(self):
         result = self.client.list_components()

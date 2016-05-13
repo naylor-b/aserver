@@ -218,8 +218,7 @@ class ComponentWrapper(object):
             except KeyError:
                 raise RuntimeError('no such method <%s>.' % method)
 
-            meth = getattr(self._comp, attr)
-            result = meth()
+            result = self._comp.invoke(attr)
             if result is None:
                 reply = ''
             elif isinstance(result, float):

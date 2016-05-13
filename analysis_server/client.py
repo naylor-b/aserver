@@ -176,8 +176,7 @@ class Client(object):
         path: string
             Path to component.
         """
-# TODO: getIcon
-        raise NotImplementedError('Client.get_icon()')
+        return self._send_recv('getIcon %s' % path)
 
     def get_license(self):
         """ Retrieves the server's license agreement. """

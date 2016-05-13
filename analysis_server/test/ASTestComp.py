@@ -246,19 +246,18 @@ class TestComponent(Component, ASMixin):
         self.raise_exception("It's your own fault...", RuntimeError)
 
     def float_method(self):
-        return self.x + self.y
+        return self.params['x'] + self.params['y']
 
     def int_method(self):
-        return self.exe_count
+        return self.unknowns['exe_count']
 
     def null_method(self):
         return
 
     def str_method(self):
-        msg = 'current state: x %r, y %r, z %r, exe_count %r' \
-              % (self.params['x'], self.params['y'], self.unknowns['z'],
-                 self.unknowns['exe_count'])
-        return msg
+        return 'current state: x %r, y %r, z %r, exe_count %r' \
+                   % (self.params['x'], self.params['y'], self.unknowns['z'],
+                       self.unknowns['exe_count'])
 
 
 if __name__ == '__main__':

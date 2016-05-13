@@ -662,6 +662,38 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
     #     if wrapper is not None:
     #         worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
 
+    def _get_icon(self, args):
+        """
+        Gets the icon data for the published component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getIcon <analysisComponent>')
+            return
+
+        cfg, _ = self._get_component(args[0])
+        if cfg is None:
+            return
+
+        raise NotImplementedError('getIcon')
+
+    def _get_license(self, args):
+        """
+        Retrieves Analysis Server's license agreement.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getLicense')
+            return
+
+        self._send_reply('Use at your own risk!')
+
     def _get_status(self, args):
         """
         Lists the run status of all component instances.
@@ -800,6 +832,25 @@ Available Commands:
    getBranchesAndTags (NOT IMPLEMENTED)
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
+
+    def _invoke(self, args):
+        """
+        Invokes a method on a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'invoke <object.method()> [full]')
+            return
+
+        name, _, method = args[0].partition('.')
+        method = method[:-2]
+        full = len(args) == 2 and args[1] == 'full'
+        proxy, worker = self._get_proxy(name)
+        if proxy is not None:
+            worker.put((proxy.invoke, (method, full, self._req_id), {}, None))
 
     def _move(self, args):
         """
@@ -971,8 +1022,8 @@ Available Commands:
     _COMMANDS['get'] = _get
     #_COMMANDS['getHierarchy'] = _get_hierarchy
     # _COMMANDS['getIcon2'] = _get_icon2
-    # _COMMANDS['getIcon'] = _get_icon
-    # _COMMANDS['getLicense'] = _get_license
+    _COMMANDS['getIcon'] = _get_icon
+    _COMMANDS['getLicense'] = _get_license
     # _COMMANDS['getQueues'] = _get_queues
     _COMMANDS['getStatus'] = _get_status
     _COMMANDS['getSysInfo'] = _get_sys_info
@@ -981,7 +1032,7 @@ Available Commands:
     # _COMMANDS['heartbeat'] = _heartbeat
     _COMMANDS['help'] = _help
     _COMMANDS['h'] = _help
-    # _COMMANDS['invoke'] = _invoke
+    _COMMANDS['invoke'] = _invoke
     # _COMMANDS['l'] = _list_properties
     # _COMMANDS['la'] = _list_categories
     # _COMMANDS['lav'] = _list_array_values
