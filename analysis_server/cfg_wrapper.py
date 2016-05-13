@@ -62,7 +62,7 @@ class _ConfigWrapper(object):
                 raise ValueError('directory %r must be a subdirectory'
                                  % directory)
 
-        self.classname = section
+        self.section = section
 
         for option, value in defaults.items():
             if not config.has_option(section, option):

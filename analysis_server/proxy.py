@@ -43,12 +43,8 @@ class SystemWrapper(object):
         else:
             raise RuntimeError("'%s' is not a FileRef." % name)
 
-    def get_abs_directory(self, name):
-        val = self.get(name)
-        if isinstance(val, FileRef):
-            return os.path.dirname(val._abspath())
-        else:
-            raise RuntimeError("'%s' is not a FileRef." % name)
+    def get_abs_directory(self):
+        return self.system._sysdata.absdir
 
     def get_description(self, name):
         if name in self.system.unknowns:

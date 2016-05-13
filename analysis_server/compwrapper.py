@@ -269,10 +269,10 @@ class ComponentWrapper(object):
         """
         try:
             lines = ['']
-            for name in sorted(self._cfg.methods.keys()):
+            for name in sorted(self._cfg.methods):
                 line = '%s()' % name
                 if full:
-                    line += ' fullName="%s"' % name
+                    line += ' fullName="%s/%s"' % (self._cfg.section, name)
                 lines.append(line)
 
             lines[0] = '%d methods found:' % (len(lines)-1)

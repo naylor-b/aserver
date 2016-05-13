@@ -55,13 +55,6 @@ class FileWrapper(VarWrapper):
             Proxy to the server hosting this file.
         """
         self._manager = manager
-        owner = self._sysproxy
-        while owner is not None:
-            if hasattr(owner, 'get_abs_directory'):
-                self._owner = owner
-                break
-            if hasattr(owner, 'parent'):
-                owner = owner.parent
 
     def get(self, attr, path):
         """

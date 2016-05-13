@@ -249,13 +249,124 @@ version: 7.0, build: 42968"""
         self.assertEqual(result,
                          'current state: x 2.0, y 3.0, z 0.0, exe_count 0')
 
+    def test_list_array_values(self):
+        self.client.start('TestComponent', 'comp')
+        try:
+            self.client.list_array_values('comp')
+        except Exception as err:
+            self.assertEqual(str(err), "Exception: NotImplementedError('listArrayValues',)")
+
+    def test_list_categories(self):
+        result = self.client.list_categories('/')
+        self.assertEqual(result, ['openmdao'])
+        result = self.client.list_categories('/openmdao')
+        self.assertEqual(result, ['components'])
+
     def test_list_components(self):
         result = self.client.list_components()
 
-
         self.assertEqual(sorted(result),
                          ['TestComponent',
-                          'openmdao.components.exec_comp.ExecComp'])
+                          'openmdao/components/exec_comp/ExecComp'])
+
+    def test_list_globals(self):
+        result = self.client.list_globals()
+        self.assertEqual(result, [])
+
+    def test_list_methods(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.list_methods('comp')
+        self.assertTrue("add_param" in result, "can't find add_param in 'comp'")
+        self.assertTrue("add_state" in result, "can't find add_state in 'comp'")
+        self.assertTrue("linearize" in result, "can't find linearize in 'comp'")
+        self.assertTrue("solve_nonlinear" in result, "can't find solve_nonlinear in 'comp'")
+        self.assertTrue("float_method" in result, "can't find float_method in 'comp'")
+        self.assertTrue("str_method" in result, "can't find str_method in 'comp'")
+        self.assertTrue("int_method" in result, "can't find int_method in 'comp'")
+
+        result = self.client.list_methods('comp', full=True)
+        self.assertTrue(("add_param", "TestComponent/add_param") in result, "can't find add_param in 'comp'")
+        self.assertTrue(("add_state", "TestComponent/add_state") in result, "can't find add_state in 'comp'")
+        self.assertTrue(("linearize", "TestComponent/linearize") in result, "can't find linearize in 'comp'")
+        self.assertTrue(("solve_nonlinear", "TestComponent/solve_nonlinear") in result, "can't find solve_nonlinear in 'comp'")
+        self.assertTrue(("float_method", "TestComponent/float_method") in result, "can't find float_method in 'comp'")
+        self.assertTrue(("str_method", "TestComponent/str_method") in result, "can't find str_method in 'comp'")
+        self.assertTrue(("int_method", "TestComponent/int_method") in result, "can't find int_method in 'comp'")
+
+    def test_list_monitors(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.list_monitors('comp')
+        expected = [
+            'ASTestComp.py',
+            'ASTestComp_loader.py',
+            '__init__.py',
+        ]
+        self.assertEqual(result, expected)
+
+    def test_list_properties(self):
+        self.client.start('TestComponent', 'comp')
+        result = self.client.list_properties()
+        self.assertEqual(result, ['comp'])
+
+        expected = [
+            ('exe_count', 'PHXLong', 'out'),
+            ('exe_dir', 'PHXString', 'out'),
+            ('in_file', 'PHXRawFile', 'in'),
+            ('obj_input', 'PHXScriptObject', 'in'),
+            ('obj_output', 'PHXScriptObject', 'out'),
+            ('out_file', 'PHXRawFile', 'out'),
+            ('sub_group', 'PHXGroup', 'in'),
+            ('x', 'PHXDouble', 'in'),
+            ('y', 'PHXDouble', 'in'),
+            ('z', 'PHXDouble', 'out'),
+        ]
+        result = self.client.list_properties('comp')
+        self.assertEqual(result, expected)
+
+    def test_monitor(self):
+        self.client.start('TestComponent', 'comp')
+        result, monitor_id = self.client.start_monitor('comp.ASTestComp-0.2.cfg')
+        expected = """\
+[Description]
+# Metadata describing the component.
+version: 0.2
+comment: Added in_file explicitly.  ( & < > )
+author: anonymous  ( & < > )
+description: Component for testing AnalysisServer functionality.
+    An additional description line.  ( & < > )
+
+[Python]
+# Information for creating an instance.
+filename: ASTestComp.py
+classname: TestComponent
+directory: floyd
+
+[Inputs]
+# Mapping from ModelCenter name to OpenMDAO name.
+# *: *                    To allow any valid input, using the same path.
+# <path>: *               To allow <path> as an input.
+# <ext_path>: <int_path>  To access <int_path> via <ext_path>
+*: *
+in_file: *
+
+[Outputs]
+# Mapping from ModelCenter name to OpenMDAO name.
+# *: *                    To allow any valid output, using the same path.
+# <path>: *               To allow <path> as an output.
+# <ext_path>: <int_path>  To access <int_path> via <ext_path>
+*: *
+
+[Methods]
+# Methods which may be invoked by ModelCenter.
+# *: *                    To allow any valid method, using the same name.
+# <name>: *               To allow <name> to be invoked.
+# <ext_name>: <int_name>  To invoke <int_name> via <ext_name>
+*: *
+
+"""
+        self.assertEqual(result[:len(expected)], expected)
+
+        self.client.stop_monitor(monitor_id)
 
 #     def test_set_hierarchy(self):
 #         # Grab value of obj_input (big XML string).
@@ -319,7 +430,7 @@ version: 7.0, build: 42968"""
         self.client.set_mode_raw()
         result = self.client.list_components()
         self.assertEqual(result, ['TestComponent',
-                                  'openmdao.components.exec_comp.ExecComp'])
+                                  'openmdao/components/exec_comp/ExecComp'])
 
         self.assertTrue(self.client._stream.raw)
 

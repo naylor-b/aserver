@@ -239,7 +239,7 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
         logging.debug('    registering %s', section)
         with self.components as comps:
-            comps[section] = (cfg, cfg.directory)
+            comps[section.replace('.', '/')] = (cfg, cfg.directory)
 
 
     # This will be exercised by client side tests.
@@ -852,6 +852,198 @@ Available Commands:
         if proxy is not None:
             worker.put((proxy.invoke, (method, full, self._req_id), {}, None))
 
+    def _list_array_values(self, args):
+        """
+        Lists all the values of an array variable.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listArrayValues,lav <object>')
+            return
+
+        name, _, path = args[0].partition('.')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.list_array_values,
+                        (path, self._req_id), {}, None))
+
+    def _list_categories(self, args):
+        """
+        Lists all the sub-categories available in a category.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) > 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listCategories,la [category]')
+            return
+
+        if args:
+            category = args[0].strip('"').strip('/') + '/' # Ensure trailing '/'
+            if category == '/':
+                category = ''
+        else:
+            category = ''
+
+        lines = set()
+        with self.server.components as comps:
+            for name in sorted(comps.keys()):
+                if name.startswith(category):
+                    name = name[len(category):]
+                    slash = name.find('/')
+                    if slash > 0:
+                        name = name[:slash]
+                        lines.add(name)
+
+        lines = ['%d categories found:' % len(lines)] + list(lines)
+        self._send_reply('\n'.join(lines))
+
+    def _list_globals(self, args):
+        """
+        Lists all component instances in the global namespace.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 0:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listGlobals,lg')
+            return
+
+        self._send_reply('0 global objects started:')  # Not supported.
+
+    def _list_methods(self, args):
+        """
+        Lists all methods available on a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listMethods,lm <object> [full]')
+            return
+
+        name = args[0]
+        full = len(args) == 2 and args[1] == 'full'
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.list_methods, (full, self._req_id), {}, None))
+
+    def _list_monitors(self, args):
+        """
+        Lists all available monitorable items on a component instance.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listMonitors,lo <objectName>')
+            return
+
+        name = args[0]
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.list_monitors, (self._req_id,), {}, None))
+
+    def _list_properties(self, args):
+        """
+        Lists all available variables and their sub-properties on a component
+        instance or sub-variable.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) > 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listProperties,list,ls,l [object]')
+            return
+
+        if len(args) == 0:  # List started components.
+            names = sorted(self._instance_map.keys())
+            lines = ['%d objects started:' % len(names)]
+            lines.extend(names)
+            self._send_reply('\n'.join(lines))
+        else:  # List component properties.
+            name, _, path = args[0].partition('.')
+            wrapper, worker = self._get_proxy(name)
+            if wrapper is not None:
+                worker.put((wrapper.list_properties,
+                            (path, self._req_id), {}, None))
+
+    def _list_values(self, args):
+        """
+        Lists all available variables and their sub-properties on a component
+        instance or sub-variable.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) > 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listValues,lv [object]')
+            return
+
+        name, _, path = args[0].partition('.')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.list_values, (path, self._req_id), {}, None))
+
+    def _list_values_url(self, args):
+        """
+        Lists all available variables and their sub-properties on a component
+        instance or sub-variable. This version supplies a URL for file data
+        if DirectFileTransfer is supported.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) > 1:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'listValuesURL,lvu [object]')
+            return
+
+        name, _, path = args[0].partition('.')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.list_values_url,
+                        (path, self._req_id), {}, None))
+
+    def _monitor(self, args):
+        """
+        Starts/stops a monitor on a raw output file or available monitor.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 2 or args[0] not in ('start', 'stop'):
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'monitor start <object.property>, '
+                             'monitor stop <id>')
+            return
+
+        if args[0] == 'start':
+            name, _, path = args[1].partition('.')
+            wrapper, worker = self._get_proxy(name)
+            if wrapper is not None:
+                worker.put((wrapper.start_monitor,
+                            (path, self._req_id), {}, None))
+                self._monitors[str(self._req_id)] = name
+        else:
+            try:
+                name = self._monitors.pop(args[1])
+            except KeyError:
+                self._send_error('No monitor registered for %r' % args[1])
+            else:
+                wrapper, worker = self._get_proxy(name)
+                worker.put((wrapper.stop_monitor,
+                            (args[1], self._req_id), {}, None))
+
     def _move(self, args):
         """
         Moves or renames a component instance.
@@ -1033,33 +1225,33 @@ Available Commands:
     _COMMANDS['help'] = _help
     _COMMANDS['h'] = _help
     _COMMANDS['invoke'] = _invoke
-    # _COMMANDS['l'] = _list_properties
-    # _COMMANDS['la'] = _list_categories
-    # _COMMANDS['lav'] = _list_array_values
-    # _COMMANDS['lc'] = _list_components
-    # _COMMANDS['lg'] = _list_globals
-    # _COMMANDS['listArrayValues'] = _list_array_values
-    # _COMMANDS['listCategories'] = _list_categories
+    _COMMANDS['la'] = _list_categories
+    _COMMANDS['lav'] = _list_array_values
+    _COMMANDS['lc'] = _list_components
+    _COMMANDS['lg'] = _list_globals
+    _COMMANDS['listArrayValues'] = _list_array_values
+    _COMMANDS['listCategories'] = _list_categories
     _COMMANDS['listComponents'] = _list_components
-    # _COMMANDS['listGlobals'] = _list_globals
-    # _COMMANDS['list'] = _list_properties
-    # _COMMANDS['listMethods'] = _list_methods
-    # _COMMANDS['listMonitors'] = _list_monitors
-    # _COMMANDS['listProperties'] = _list_properties
-    # _COMMANDS['listValues'] = _list_values
-    # _COMMANDS['listValuesURL'] = _list_values_url
-    # _COMMANDS['lm'] = _list_methods
-    # _COMMANDS['lo'] = _list_monitors
-    # _COMMANDS['ls'] = _list_properties
-    # _COMMANDS['lv'] = _list_values
-    # _COMMANDS['lvu'] = _list_values_url
+    _COMMANDS['listGlobals'] = _list_globals
+    _COMMANDS['listMethods'] = _list_methods
+    _COMMANDS['lm'] = _list_methods
+    _COMMANDS['listMonitors'] = _list_monitors
+    _COMMANDS['lo'] = _list_monitors
+    _COMMANDS['l'] = _list_properties
+    _COMMANDS['list'] = _list_properties
+    _COMMANDS['ls'] = _list_properties
+    _COMMANDS['listProperties'] = _list_properties
+    _COMMANDS['listValues'] = _list_values
+    _COMMANDS['lv'] = _list_values
+    _COMMANDS['listValuesURL'] = _list_values_url
+    _COMMANDS['lvu'] = _list_values_url
     # _COMMANDS['monitor'] = _monitor
     _COMMANDS['move'] = _move
     _COMMANDS['mv'] = _move
+    _COMMANDS['rename'] = _move
+    _COMMANDS['rn'] = _move
     _COMMANDS['ps'] = _ps
     _COMMANDS['quit'] = _quit
-    # _COMMANDS['rename'] = _move
-    # _COMMANDS['rn'] = _move
     # _COMMANDS['setDictionary'] = _set_dictionary
     #_COMMANDS['setHierarchy'] = _set_hierarchy
     _COMMANDS['setMode'] = _set_mode
