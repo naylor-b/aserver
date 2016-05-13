@@ -294,7 +294,7 @@ class ComponentWrapper(object):
                 paths = [path for path in paths
                               if not os.path.isdir(os.path.join(root, path))]
             else:  # pragma no cover
-                paths = self._manager.listdir(root)
+                paths = self._comp.listdir(root)
                 paths = [path for path in paths
                             if not self._manager.isdir(os.path.join(root, path))]
             paths = [path for path in paths if not path.startswith('.')]

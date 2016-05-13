@@ -43,6 +43,9 @@ class SystemWrapper(object):
         else:
             raise RuntimeError("'%s' is not a FileRef." % name)
 
+    def listdir(self, root):
+        return os.listdir(root)
+
     def get_abs_directory(self):
         return self.system._sysdata.absdir
 
