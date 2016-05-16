@@ -43,8 +43,50 @@ class SystemWrapper(object):
         else:
             raise RuntimeError("'%s' is not a FileRef." % name)
 
+    def fread(self, path, offset, num_bytes):
+        """Attempt to read the specified number of bytes from the file with
+        the specified path name.
+        """
+        with open(path, 'rb') as f:
+            f.seek(offset)
+            return f.read(num_bytes)
+
+    def check_file(self, path):
+        if not os.path.isfile(path):
+            raise OSError("%s not found" % path)
+
+    def stat(self, path):
+        """
+        Returns ``os.stat(path)`` if `path` is legal.
+
+        path: string
+            Path to file to interrogate.
+        """
+        logging.debug('stat %r', path)
+        try:
+            return os.stat(path)
+        except Exception as exc:
+            logging.error('stat %r in %s failed %s',
+                               path, os.getcwd(), exc)
+            raise
+
+    def list_text_files(self):
+        text_files = []
+        absdir = self.get_abs_directory()
+        for path in os.listdir(absdir):
+            if os.path.isdir(path) or path.startswith('.'):
+                continue
+            with open(os.path.join(absdir, path), 'rb') as inp:
+                if '\x00' not in inp.read(1 << 12):  # 4KB
+                    text_files.append(path)
+
+        return text_files
+
     def listdir(self, root):
         return os.listdir(root)
+
+    def isdir(self, path):
+        return os.path.isdir(path)
 
     def get_abs_directory(self):
         return self.system._sysdata.absdir

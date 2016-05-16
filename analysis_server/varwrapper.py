@@ -66,8 +66,8 @@ class VarWrapper(object):
         self._name = name
         self._ext_path = ext_path
         self._ext_name = ext_path.rpartition('.')[2]
-        self._access = 'sg' if name in cfg.inputs else 'g'
-        self._io = 'input' if name in cfg.inputs  else 'output'
+        self._access = 'sg' if ext_path in cfg.inputs else 'g'
+        self._io = 'input' if ext_path in cfg.inputs  else 'output'
         self._meta = sysproxy.get_metadata(name)
         self._logger = logging.getLogger(name)
 

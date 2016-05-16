@@ -189,6 +189,10 @@ version: 7.0, build: 42968"""
         result = self.client.get_version()
         self.assertEqual(result, expected)
 
+    def test_heartbeat(self):
+        self.client.heartbeat(True)
+        self.client.heartbeat(False)
+
     def test_help(self):
         expected = [
             'Available Commands:',
@@ -296,12 +300,8 @@ version: 7.0, build: 42968"""
     def test_list_monitors(self):
         self.client.start('TestComponent', 'comp')
         result = self.client.list_monitors('comp')
-        expected = [
-            'ASTestComp.py',
-            'ASTestComp_loader.py',
-            '__init__.py',
-        ]
-        self.assertEqual(result, expected)
+        self.assertTrue('hosts.allow' in result)
+        self.assertTrue('openmdao_log.txt' in result)
 
     def test_list_properties(self):
         self.client.start('TestComponent', 'comp')
@@ -309,60 +309,81 @@ version: 7.0, build: 42968"""
         self.assertEqual(result, ['comp'])
 
         expected = [
-            ('exe_count', 'PHXLong', 'out'),
-            ('exe_dir', 'PHXString', 'out'),
-            ('in_file', 'PHXRawFile', 'in'),
-            ('obj_input', 'PHXScriptObject', 'in'),
-            ('obj_output', 'PHXScriptObject', 'out'),
-            ('out_file', 'PHXRawFile', 'out'),
-            ('sub_group', 'PHXGroup', 'in'),
-            ('x', 'PHXDouble', 'in'),
-            ('y', 'PHXDouble', 'in'),
-            ('z', 'PHXDouble', 'out'),
+             ('exe_count', 'PHXLong', 'out'),
+             ('exe_dir', 'PHXString', 'out'),
+             ('in_file', 'PHXRawFile', 'in'),
+             ('obj_input.sobobj.sob', 'PHXBoolean', 'in'),
+             ('obj_input.sobobj.sof', 'PHXDouble', 'in'),
+             ('obj_input.sobobj.soi', 'PHXLong', 'in'),
+             ('obj_input.sobobj.sos', 'PHXString', 'in'),
+             ('obj_input.tob', 'PHXBoolean', 'in'),
+             ('obj_input.tof', 'PHXDouble', 'in'),
+             ('obj_input.tof1d', 'double[9]', 'in'),
+             ('obj_input.tof2d', 'double[2][4]', 'in'),
+             ('obj_input.tof3d', 'double[2][3][3]', 'in'),
+             ('obj_input.tofe', 'PHXDouble', 'in'),
+             ('obj_input.toflst', 'double[0]', 'in'),
+             ('obj_input.toi', 'PHXLong', 'in'),
+             ('obj_input.toi1d', 'long[9]', 'in'),
+             ('obj_input.toie', 'PHXLong', 'in'),
+             ('obj_input.toilst', 'long[0]', 'in'),
+             ('obj_input.tos', 'PHXString', 'in'),
+             ('obj_input.tos1d', 'java.lang.String[3]', 'in'),
+             ('obj_input.tose', 'PHXString', 'in'),
+             ('obj_output.sobobj.sob', 'PHXBoolean', 'out'),
+             ('obj_output.sobobj.sof', 'PHXDouble', 'out'),
+             ('obj_output.sobobj.soi', 'PHXLong', 'out'),
+             ('obj_output.sobobj.sos', 'PHXString', 'out'),
+             ('obj_output.tob', 'PHXBoolean', 'out'),
+             ('obj_output.tof', 'PHXDouble', 'out'),
+             ('obj_output.tof1d', 'double[9]', 'out'),
+             ('obj_output.tof2d', 'double[2][4]', 'out'),
+             ('obj_output.tof3d', 'double[2][3][3]', 'out'),
+             ('obj_output.tofe', 'PHXDouble', 'out'),
+             ('obj_output.toflst', 'double[0]', 'out'),
+             ('obj_output.toi', 'PHXLong', 'out'),
+             ('obj_output.toi1d', 'long[9]', 'out'),
+             ('obj_output.toie', 'PHXLong', 'out'),
+             ('obj_output.toilst', 'long[0]', 'out'),
+             ('obj_output.tos', 'PHXString', 'out'),
+             ('obj_output.tos1d', 'java.lang.String[3]', 'out'),
+             ('obj_output.tose', 'PHXString', 'out'),
+             ('out_file', 'PHXRawFile', 'out'),
+             ('sub_group.b', 'PHXBoolean', 'in'),
+             ('sub_group.f', 'PHXDouble', 'in'),
+             ('sub_group.f1d', 'double[9]', 'in'),
+             ('sub_group.f2d', 'double[2][4]', 'in'),
+             ('sub_group.f3d', 'double[2][3][3]', 'in'),
+             ('sub_group.fe', 'PHXDouble', 'in'),
+             ('sub_group.flst', 'double[0]', 'in'),
+             ('sub_group.i', 'PHXLong', 'in'),
+             ('sub_group.i1d', 'long[9]', 'in'),
+             ('sub_group.ie', 'PHXLong', 'in'),
+             ('sub_group.ilst', 'long[0]', 'in'),
+             ('sub_group.s', 'PHXString', 'in'),
+             ('sub_group.s1d', 'java.lang.String[3]', 'in'),
+             ('sub_group.se', 'PHXString', 'in'),
+             ('x', 'PHXDouble', 'in'),
+             ('y', 'PHXDouble', 'in'),
+             ('z', 'PHXDouble', 'out')
         ]
         result = self.client.list_properties('comp')
         self.assertEqual(result, expected)
 
     def test_monitor(self):
         self.client.start('TestComponent', 'comp')
-        result, monitor_id = self.client.start_monitor('comp.ASTestComp-0.2.cfg')
+        result, monitor_id = self.client.start_monitor('comp.d2/d3/TestComponents.cfg')
         expected = """\
-[Description]
-# Metadata describing the component.
+[TestComponent]
 version: 0.2
-comment: Added in_file explicitly.  ( & < > )
+filename: ASTestComp.py
+comment: Initial version.
 author: anonymous  ( & < > )
 description: Component for testing AnalysisServer functionality.
     An additional description line.  ( & < > )
 
-[Python]
-# Information for creating an instance.
-filename: ASTestComp.py
-classname: TestComponent
-directory: floyd
-
-[Inputs]
-# Mapping from ModelCenter name to OpenMDAO name.
-# *: *                    To allow any valid input, using the same path.
-# <path>: *               To allow <path> as an input.
-# <ext_path>: <int_path>  To access <int_path> via <ext_path>
-*: *
-in_file: *
-
-[Outputs]
-# Mapping from ModelCenter name to OpenMDAO name.
-# *: *                    To allow any valid output, using the same path.
-# <path>: *               To allow <path> as an output.
-# <ext_path>: <int_path>  To access <int_path> via <ext_path>
-*: *
-
-[Methods]
-# Methods which may be invoked by ModelCenter.
-# *: *                    To allow any valid method, using the same name.
-# <name>: *               To allow <name> to be invoked.
-# <ext_name>: <int_name>  To invoke <int_name> via <ext_name>
-*: *
-
+[openmdao.components.exec_comp.ExecComp]
+args: y=2.0*x
 """
         self.assertEqual(result[:len(expected)], expected)
 

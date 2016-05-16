@@ -16,6 +16,7 @@ except ImportError:  # pragma no cover
     pass  # Not available on Windows.
 
 from analysis_server.varwrapper import _find_var_wrapper, _float2str
+from analysis_server.monitor import FileMonitor
 
 # import var wrappers so they get registered
 import analysis_server.floatwrapper
@@ -107,7 +108,7 @@ class ComponentWrapper(object):
                 # Wrap it.
                 wrapper = wrapper_class(self._comp, int_path, epath, self._cfg)
                 if wrapper_class is FileWrapper:
-                    wrapper.set_manager(self._manager)
+                    wrapper.set_proxy(self._manager)
                 self._wrappers[int_path] = wrapper
 
             attr = ext_attr or 'value'
@@ -289,27 +290,7 @@ class ComponentWrapper(object):
         """
         try:
             root = self._comp.get_abs_directory()
-            if self._manager is None:  # Used when testing.
-                paths = os.listdir(root)
-                paths = [path for path in paths
-                              if not os.path.isdir(os.path.join(root, path))]
-            else:  # pragma no cover
-                paths = self._comp.listdir(root)
-                paths = [path for path in paths
-                            if not self._manager.isdir(os.path.join(root, path))]
-            paths = [path for path in paths if not path.startswith('.')]
-            text_files = []
-            for path in paths:  # List only text files.
-                if self._manager is None:  # Used when testing.
-                    inp = open(os.path.join(root, path), 'rb')
-                else:  # pragma no cover
-                    inp = self._manager.open(os.path.join(root, path), 'rb')
-                try:
-                    data = inp.read(1 << 12)  # 4KB
-                    if '\x00' not in data:
-                        text_files.append(path)
-                finally:
-                    inp.close()
+            text_files = self._comp.list_text_files()
             lines = ['%d monitors:' % len(text_files)]
             lines.extend(sorted(text_files))
             self._send_reply('\n'.join(lines), req_id)
@@ -352,18 +333,19 @@ class ComponentWrapper(object):
             for ext_path in sorted(self._cfg.properties.keys()):
                 if path and not ext_path.startswith(path):
                     continue
-                rest = ext_path[length:]
-                name, _, rest = rest.partition('.')
-                if rest:
-                    if name in groups:
-                        continue
-                    groups.add(name)
-                    typ = 'com.phoenix_int.aserver.PHXGroup'
-                    access = 'sg'
-                else:
-                    wrapper, attr = self._get_var_wrapper(ext_path)
-                    typ = wrapper.phx_type
-                    access = wrapper.phx_access
+                name = ext_path[length:]
+                # rest = ext_path[length:]
+                # name, _, rest = rest.partition('.')
+                # if rest:
+                #     if name in groups:
+                #         continue
+                #     groups.add(name)
+                #     typ = 'com.phoenix_int.aserver.PHXGroup'
+                #     access = 'sg'
+                # else:
+                wrapper, attr = self._get_var_wrapper(ext_path)
+                typ = wrapper.phx_type
+                access = wrapper.phx_access
                 lines.append('%s (type=%s) (access=%s)' % (name, typ, access))
         else:
             lines.extend(wrapper.list_properties())
@@ -447,7 +429,7 @@ class ComponentWrapper(object):
         """
         try:
             path = os.path.join(self._comp.get_abs_directory(), path)
-            monitor = FileMonitor(self._manager, path, 'r',
+            monitor = FileMonitor(self._comp, path, 'r',
                                   req_id, self._send_reply)
             monitor.start()
             self._monitors[str(req_id)] = monitor  # Monitor id is request id.

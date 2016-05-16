@@ -54,17 +54,6 @@ class VariableTree(object):
 
         setattr(parent, self.name, self)
 
-    def update_parent_unknowns(self, parent, src_vartree):
-        """Using the names in this VariableTree and the source
-        VariableTree, copy values from the params vec to the
-        unknowns vec (both in the parent).
-        """
-        for k, val, kwargs in src_vartree.iter_vars():
-            if k in self.variables:
-                oldval, oldkwargs = self.variables[k]
-                self.variables[k] = (val, oldkwargs)
-
-
 class Container(VariableTree):
     """A class to make it easier to port over old subcontainers from
     classic OpenMDAO. A Container can contain variables with different
@@ -240,7 +229,10 @@ class TestComponent(Component, ASMixin):
         sys.stdout.flush()
 
         # Copy input object to output object.
-        self.obj_output.update_parent_unknowns(self, self.obj_input)
+        for v in self.obj_input.variables:
+            iname = ':'.join(('obj_input', v))
+            oname = ':'.join(('obj_output', v))
+            self.unknowns[oname] = self.params[iname]
 
     def cause_exception(self):
         self.raise_exception("It's your own fault...", RuntimeError)
@@ -264,11 +256,12 @@ if __name__ == '__main__':
     p = Problem(root=Group())
     top = p.root
     comp = top.add('comp', TestComponent())
-    comp._init_params_dict['in_file']['val'].fname = 'ASTestComp-0.1.cfg'
-    p.setup()
+    comp._init_params_dict['in_file']['val'].fname = 'TestComponents.cfg'
+    p.setup(check=False)
     p.run()
-    for path in ('x', 'y', 'z', 'exe_count',
-                 'sub_group:b', 'sub_group:f', 'sub_group:i', 'sub_group:s',
-                 'sub_group:fe', 'sub_group:ie', 'sub_group:se',
-                 'sub_group:f1d', 'sub_group:i1d', 'sub_group:s1d'):
-        print('%s: %s' % (path, p['.'.join(('comp',path))]))
+    for n,v in iteritems(p.root._params_dict):
+        print(n,v['val'])
+    print("------------")
+    for n,v in iteritems(p.root._unknowns_dict):
+        print(n,v['val'])
+

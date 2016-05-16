@@ -25,7 +25,7 @@ class FileWrapper(VarWrapper):
 
     def __init__(self, sysproxy, name, ext_path, cfg):
         super(FileWrapper, self).__init__(sysproxy, name, ext_path, cfg)
-        self._manager = None
+        self._proxy = None
 
     @property
     def binary(self):
@@ -47,14 +47,14 @@ class FileWrapper(VarWrapper):
         """ AnalysisServer type string for value. """
         return 'com.phoenix_int.aserver.types.PHXRawFile'
 
-    def set_manager(self, manager):
+    def set_proxy(self, proxy):
         """
-        Set manager to `manager` for file operations.
+        Set proxy to `proxy` for file operations.
 
-        server: proxy
+        proxy: proxy
             Proxy to the server hosting this file.
         """
-        self._manager = manager
+        self._proxy = proxy
 
     def get(self, attr, path):
         """

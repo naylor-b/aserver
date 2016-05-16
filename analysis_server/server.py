@@ -60,6 +60,7 @@ from analysis_server.publickey import make_private
 from analysis_server.mp_util import read_allowed_hosts
 from analysis_server.cfg_wrapper import _ConfigWrapper
 from analysis_server.compwrapper import ComponentWrapper
+from analysis_server.monitor import Heartbeat
 
 # from analysis_server.filexfer import filexfer
 from analysis_server.proxy import SystemWrapper, SysManager
@@ -75,6 +76,8 @@ _AS_BUILD = '42968'
 
 # Maps from command string to command handler.
 _COMMANDS = {}
+
+_DISABLE_HEARTBEAT = False  # If True, no heartbeat replies are sent.
 
 _DBG_LEN = 10000  # Max length of debug log message.
 
@@ -776,6 +779,31 @@ version: %s, build: %s""" % (_VERSION, _AS_VERSION, _AS_BUILD))
             lines.extend(sorted(comps.keys()))
         self._send_reply('\n'.join(lines))
 
+    def _heartbeat(self, args):
+        """
+        Starts up socket heartbeating in order to keep sockets alive through
+        firewalls with timeouts.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) != 1 or args[0] not in ('start', 'stop'):
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'heartbeat,hb [start|stop]')
+            return
+
+        if args[0] == 'start':
+            if not _DISABLE_HEARTBEAT:
+                if self._hb is not None:  # Ensure only one.
+                    self._hb.stop()
+                self._hb = Heartbeat(self._req_id, self._send_reply)
+                self._hb.start()
+            self._send_reply('Heartbeating started')
+        else:
+            if self._hb is not None:
+                self._hb.stop()
+            self._send_reply('Heartbeating stopped')
+
     def _help(self, args):
         """
         Help on Analysis Server commands.
@@ -1220,8 +1248,8 @@ Available Commands:
     _COMMANDS['getStatus'] = _get_status
     _COMMANDS['getSysInfo'] = _get_sys_info
     _COMMANDS['getVersion'] = _get_version
-    # _COMMANDS['hb'] = _heartbeat
-    # _COMMANDS['heartbeat'] = _heartbeat
+    _COMMANDS['hb'] = _heartbeat
+    _COMMANDS['heartbeat'] = _heartbeat
     _COMMANDS['help'] = _help
     _COMMANDS['h'] = _help
     _COMMANDS['invoke'] = _invoke
@@ -1245,7 +1273,7 @@ Available Commands:
     _COMMANDS['lv'] = _list_values
     _COMMANDS['listValuesURL'] = _list_values_url
     _COMMANDS['lvu'] = _list_values_url
-    # _COMMANDS['monitor'] = _monitor
+    _COMMANDS['monitor'] = _monitor
     _COMMANDS['move'] = _move
     _COMMANDS['mv'] = _move
     _COMMANDS['rename'] = _move
@@ -1387,10 +1415,6 @@ def main():  # pragma no cover
         programmatic startup during testing.
     """
 
-    # --no-heartbeat:
-    #     Do not send heartbeat replies. Simplifies debugging.
-    #
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--hosts', type=str, default='hosts.allow',
                         help='filename for allowed hosts')
@@ -1400,8 +1424,8 @@ def main():  # pragma no cover
                         default=DEFAULT_PORT, help='port to listen on')
     parser.add_argument('-d', '--debug', action='store_true',
                         help='Set logging level to DEBUG')
-    # parser.add_argument('--no-heartbeat', action='store_true',
-    #                     help='Do not send heartbeat replies')
+    parser.add_argument('--no-heartbeat', action='store_true',
+                        help='Do not send heartbeat replies')
     parser.add_argument('--up', default='',
                        help="if non-null, file written when server is 'up'")
 
@@ -1416,6 +1440,9 @@ def main():  # pragma no cover
 
     level = logging.DEBUG if options.debug else logging.INFO
     logging.getLogger().setLevel(level)
+
+    global _DISABLE_HEARTBEAT
+    _DISABLE_HEARTBEAT = options.no_heartbeat
 
     # Get allowed_hosts.
     if os.path.exists(options.hosts):
