@@ -58,12 +58,18 @@ from analysis_server.stream  import Stream
 from analysis_server.wrkpool import WorkerPool
 from analysis_server.publickey import make_private
 from analysis_server.mp_util import read_allowed_hosts
-from analysis_server.cfg_wrapper import _ConfigWrapper
+from analysis_server.cfg_wrapper import _ConfigWrapper, _CONFIG_DEFAULTS
 from analysis_server.compwrapper import ComponentWrapper
 from analysis_server.monitor import Heartbeat
 
 # from analysis_server.filexfer import filexfer
 from analysis_server.proxy import SystemWrapper, SysManager
+
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
+
 
 ERROR_PREFIX = 'ERROR: '
 
@@ -94,6 +100,7 @@ def get_open_address():
 
 #DEFAULT_PORT = 1835
 DEFAULT_PORT = get_open_address()[1]
+
 
 class _ThreadedDictContextMgr(object):
     """ Share `dct` among multiple threads via the 'with' statement. """
@@ -196,7 +203,7 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         path = os.path.abspath(path)
 
         logging.info('Reading config file %r', path)
-        config = ConfigParser.SafeConfigParser()
+        config = ConfigParser.SafeConfigParser(_CONFIG_DEFAULTS)
         config.optionxform = str  # Preserve case.
         files = config.read(path)
         if not files:
@@ -1193,7 +1200,10 @@ Available Commands:
         with self.server.dir_lock:
             manager = SysManager()
             manager.start()
-            proxy = manager.SystemWrapper()
+            if MPI and cfg.num_procs > 1:
+                proxy = manager.DynMPISystemWrapper()
+            else:
+                proxy = manager.SystemWrapper()
             proxy.init(classname, name, cfg.filename, directory=directory)
 
         # Create wrapper for component.

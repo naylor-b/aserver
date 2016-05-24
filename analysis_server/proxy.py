@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 import os
 import sys
@@ -11,6 +12,10 @@ from openmdao.core.fileref import FileRef
 from openmdao.core.group import Group
 from openmdao.util.file_util import DirContext
 
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
 
 class SystemWrapper(object):
 
@@ -19,13 +24,25 @@ class SystemWrapper(object):
                                                directory, args=args)
 
     def set(self, name, value):
-        self.system.params[name] = value
+        if name in self.system.params:
+            self.system.params[name] = value
+        else: # try to find a matching Problem attribute
+            parts = name.split('.')
+            obj = self.problem
+            for n in parts[:-1]:
+                obj = getattr(obj, n)
+            setattr(obj, parts[-1], value)
 
     def get(self, name):
         if name in self.system.unknowns:
             return self.system.unknowns[name]
-        else:
+        elif name in self.system.params:
             return self.system.params[name]
+        else:  # try to find a matching Problem attribute
+            obj = self.problem
+            for n in name.split('.'):
+                obj = getattr(obj, n)
+            return obj
 
     def invoke(self, name):
         return getattr(self.system, name)()
@@ -112,10 +129,106 @@ class SystemWrapper(object):
         if hasattr(self.system, 'pre_delete'):
             self.system.pre_delete()
 
+
+class DynMPISystemWrapper(SystemWrapper):
+    """Wrapper for a Problem that requires multiple MPI processes. These
+    processes are allocated dynamicallly using MPI.COMM_SELF.Spawn().
+    """
+
+    def init(self, num_procs, classname, instname, fpath=None, directory='',
+             args=()):
+        print("DYNMPISYSWRAPPER!")
+        mydir = os.path.dirname(os.path.abspath(__file__))
+        dynmod = os.path.join(mydir, 'dyn_mpi.py')
+        dynargs = [dynmod, classname, instname]
+        if fpath:
+            dynargs.append('filename=%s' % fpath)
+        if directory:
+            dynargs.append("directory=%s" % directory)
+        dynargs.extend(args)
+
+        self.comm = MPI.COMM_SELF.Spawn(sys.executable,
+                                        args=dynargs,
+                                        maxprocs=num_procs)
+
+    def _do_cmd(self, cmd, *args):
+        self.comm.bcast((cmd, args), root=MPI.ROOT)
+        results = self.comm.gather(None, root=MPI.ROOT)
+        for r, tb in results:
+            if tb is not None:  # an error occurred
+                raise RuntimeError(tb)
+        return results[0][0]
+
+    def set(self, name, value):
+        self._do_cmd('set', name, value)
+
+    def get(self, name):
+        return self._do_cmd('get', name)
+
+    def invoke(self, name):
+        return self._do_cmd('invoke', name)
+
+    def get_pathname(self):
+        return self._do_cmd('get_pathname')
+
+    def run(self):
+        return self._do_cmd('run')
+
+    def write(self, name, value):
+        return self._do_cmd('write', name, value)
+
+    def fread(self, path, offset, num_bytes):
+        """Attempt to read the specified number of bytes from the file with
+        the specified path name.
+        """
+        return self._do_cmd('fread', path, offset, num_bytes)
+
+    def check_file(self, path):
+        return self._do_cmd('check_file', path)
+
+    def stat(self, path):
+        """
+        Returns ``os.stat(path)`` if `path` is legal.
+
+        path: string
+            Path to file to interrogate.
+        """
+        return self._do_cmd('stat', path)
+
+    def list_text_files(self):
+        return self._do_cmd('list_text_files')
+
+    def listdir(self, root):
+        return self._do_cmd('listdir', root)
+
+    def isdir(self, path):
+        return self._do_cmd('isdir', path)
+
+    def get_abs_directory(self):
+        return self._do_cmd('get_abs_directory')
+
+    def get_description(self, name):
+        return self._do_cmd('get_description', name)
+
+    def get_metadata(self, name):
+        return self._do_cmd('get_metadata', name)
+
+    def set_name(self, name):
+        return self._do_cmd('set_name', name)
+
+    def pre_delete(self):
+        self._do_cmd('pre_delete')
+
+        self.comm.bcast('STOP', root=MPI.ROOT)
+        self.comm.Disconnect()
+
+
 class SysManager(BaseManager):
     pass
 
+
 SysManager.register('SystemWrapper', SystemWrapper)
+SysManager.register('DynMPISystemWrapper', DynMPISystemWrapper)
 
 
 def _setup_obj(classname, instname, filename=None, directory='', args=()):
@@ -155,8 +268,16 @@ def _setup_obj(classname, instname, filename=None, directory='', args=()):
             raise RuntimeError("Can't instantiate %s.%s: %r"
                                % (modname, classname, exc))
 
-        p = Problem(root=Group())
-        p.root.add(instname, obj)
+        if isinstance(obj, Problem):
+            p = obj
+            obj = p.root
+        else:
+            if isinstance(obj, Group) and not instname:
+                p = Problem(root=obj)
+            else:
+                p = Problem(root=Group())
+                p.root.add(instname, obj)
+
         p.setup(check=False)
 
     return p, obj

@@ -10,6 +10,21 @@ from six import iteritems
 from analysis_server.varwrapper import _find_var_wrapper
 from analysis_server.proxy import _setup_obj
 
+_CONFIG_DEFAULTS = {
+    'version': '',
+    'comment': '',
+    'author': '',
+    'description': '',
+    'help_url': '',
+    'keywords': '',
+    'requirements': '',
+    'num_procs': '1',
+    'args': '',
+    'directory': None,
+    'filename': None,
+}
+
+
 class _ConfigWrapper(object):
     """
     Retains configuration data for a wrapped component class.
@@ -28,47 +43,23 @@ class _ConfigWrapper(object):
     def __init__(self, config, section, timestamp):
 
         # Get description info.
-        defaults = {
-            'version': '',
-            'comment': '',
-            'author': '',
-            'description': '',
-            'help_url': '',
-            'keywords': '',
-            'requirements': '',
-        }
-
         # Get Python class and create temporary instance.
-        if config.has_option(section, 'filename'):
-            fname = config.get(section, 'filename')
-        else:
-            fname = None
+        for option in _CONFIG_DEFAULTS:
+            setattr(self, option, config.get(section, option))
 
-        self.filename = fname
+        self.num_procs = int(self.num_procs)
 
-        if config.has_option(section, 'args'):
-            args = [a.strip() for a in config.get(section, 'args').split()
-                                   if a.strip()]
-        else:
-            args = []
+        self.args = [a.strip() for a in self.args.split() if a.strip()]
 
-        p, instance = _setup_obj(section, 'comp', fname, args=args)
+        p, instance = _setup_obj(section, 'comp', self.filename, args=self.args)
 
         # Check for optional diectory path.
-        self.directory = directory = None
-        if config.has_option(section, 'directory'):
-            directory = config.get(section, 'directory')
-            if os.path.isabs(directory) or directory.startswith('..'):
+        if self.directory:
+            if os.path.isabs(self.directory) or self.directory.startswith('..'):
                 raise ValueError('directory %r must be a subdirectory'
-                                 % directory)
+                                 % self.directory)
 
         self.section = section
-
-        for option, value in defaults.items():
-            if not config.has_option(section, option):
-                setattr(self, option, value)
-            else:
-                setattr(self, option, config.get(section, option))
 
         # Timestamp from config file timestamp
         self.timestamp = timestamp
