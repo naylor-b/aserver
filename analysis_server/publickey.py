@@ -32,7 +32,7 @@ if sys.platform == 'win32':  #pragma no cover
 else:
     HAVE_PYWIN32 = False
 
-from openmdao.util.log import NullLogger
+import openmdao.util.log
 
 # Cache of client key pairs indexed by user.
 _KEY_CACHE = {}
@@ -68,7 +68,7 @@ def get_key_pair(user_host, logger=None,
         key is stored in ssh form in ``~/.openmdao/id_rsa.pub``.
 
     """
-    logger = logger or NullLogger()
+    logger = logger or logging.getLogger()
 
     with _KEY_CACHE_LOCK:
         if overwrite_cache:
@@ -390,7 +390,7 @@ def read_authorized_keys(filename=None, logger=None):
         filename = \
             os.path.expanduser(os.path.join('~', '.ssh', 'authorized_keys'))
 
-    logger = logger or NullLogger()
+    logger = logger or logging.getLogger()
 
     if not os.path.exists(filename):
         raise RuntimeError('%r does not exist' % filename)
@@ -502,7 +502,7 @@ def write_authorized_keys(allowed_users, filename, logger=None):
     logger: :class:`logging.Logger`
         Used for log messages.
     """
-    logger = logger or NullLogger()
+    logger = logger or logging.getLogger()
 
     with open(filename, 'w') as out:
         for user in sorted(allowed_users.keys()):

@@ -10,31 +10,40 @@ import platform
 import getpass
 import time
 import glob
+import logging
+import fnmatch
 
 from analysis_server.server import start_server, stop_server
 from analysis_server.client import Client
 
 STARTDIR = os.getcwd()
+OPENMDAO_TMPDIR = os.environ.get('OPENMDAO_TMPDIR')
+KEEPDIRS = os.environ.get('OPENMDAO_KEEPDIRS', False)
 
 class TestCase(unittest.TestCase):
     """ Test AnalysisServer emulation. """
 
     def setUp(self):
+        logging.info("---------------- Starting test %s" % self.id())
+
         self.testdir = os.path.dirname(os.path.abspath(__file__))
-        self.tempdir = tempfile.mkdtemp(prefix='aserver-')
+        if OPENMDAO_TMPDIR:
+            self.tempdir = os.path.join(OPENMDAO_TMPDIR, self.id().split('.')[-1])
+        else:
+            self.tempdir = tempfile.mkdtemp(prefix=self.id().split('.')[-1]+'_')
 
         os.makedirs(os.path.join(self.tempdir, 'd1'))
         os.makedirs(os.path.join(self.tempdir, 'd2/d3'))
 
         shutil.copy(os.path.join(self.testdir, 'ASTestComp.py'),
                     os.path.join(self.tempdir, 'd2', 'd3'))
-        shutil.copy(os.path.join(self.testdir, 'TestComponents.cfg'),
+        shutil.copy(os.path.join(self.testdir, 'TestCompProblem.cfg'),
                     os.path.join(self.tempdir, 'd2', 'd3'))
 
         os.chdir(self.tempdir)
 
         try:
-            self.server, self.port = start_server(args=['-c', 'd2/d3/TestComponents.cfg'])
+            self.server, self.port = start_server(args=['-c', self.tempdir])
             self.client = Client(port=self.port)
         except:
             os.chdir(STARTDIR)
@@ -46,7 +55,7 @@ class TestCase(unittest.TestCase):
             stop_server(self.server)
         finally:
             os.chdir(STARTDIR)
-            if not os.environ.get('OPENMDAO_KEEPDIRS'):
+            if not KEEPDIRS and not OPENMDAO_TMPDIR:
                 try:
                     shutil.rmtree(self.tempdir)
                 except OSError:
@@ -86,14 +95,14 @@ class TestCase(unittest.TestCase):
             'HasVersionInfo': 'false',
             'Checksum': '0',
         }
-        files = glob.glob('d2/d3/TestComponents.cfg')
+        files = glob.glob('d2/d3/TestCompProblem.cfg')
         if len(files) < 1:
-            self.fail("Couldn't find TestComponents.cfg file.")
+            self.fail("Couldn't find TestCompProblem.cfg file.")
 
         expected['Time Stamp'] = \
             time.ctime(os.path.getmtime(files[0]))
 
-        result = self.client.describe('TestComponent')
+        result = self.client.describe('d2/d3/TestCompProblem')
 
         for key, val in expected.items():
             try:
@@ -102,7 +111,7 @@ class TestCase(unittest.TestCase):
                 self.fail("Key '%s' not found in results." % key)
 
     def test_end(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         reply = self.client.end('comp')
         self.assertEqual(reply, 'comp completed.\nObject comp ended.')
 
@@ -124,13 +133,13 @@ class TestCase(unittest.TestCase):
             self.fail("Exception expected")
 
     def test_execute(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         self.client.set('comp.in_file', 'Hello world!')
         self.client.execute('comp')
         self.client.execute('comp', background=True)
 
     def test_get(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         result = self.client.get('comp.x')
         self.assertEqual(result, '2')
 
@@ -143,15 +152,16 @@ class TestCase(unittest.TestCase):
         self.assertFalse(result)
 
     # def test_get_hierarchy(self):
-    #     self.client.start('TestComponent', 'comp')
+    #     self.client.start('d2/d3/TestCompProblem', 'comp')
     #     result = self.client.get_hierarchy('comp')
     #
 
     def test_get_icon(self):
         try:
-            self.client.get_icon('TestComponent')
+            self.client.get_icon('d2/d3/TestCompProblem')
         except Exception as err:
-            self.assertEqual(str(err), "Exception: NotImplementedError('getIcon',)")
+            self.assertTrue('NotImplementedError' in str(err))
+            self.assertTrue('getIcon' in str(err))
         else:
             self.fail("Exception expected")
 
@@ -161,7 +171,7 @@ class TestCase(unittest.TestCase):
 
     def test_get_status(self):
         expected = {'comp': 'ready'}
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         result = self.client.get_status()
         self.assertEqual(result, expected)
 
@@ -170,7 +180,7 @@ class TestCase(unittest.TestCase):
             'version': '7.0',
             'build': '42968',
             'num clients': '1',
-            'num components': '2',
+            'num components': '1',
             'os name': platform.system(),
             'os arch': platform.processor(),
             'os version': platform.release(),
@@ -231,8 +241,8 @@ version: 7.0, build: 42968"""
             'getByUrl <object.property> <url> (NOT IMPLEMENTED)',
             'setByUrl <object.property> = <url> (NOT IMPLEMENTED)',
             'setDictionary <xml dictionary string> (xml accepted, but not used)',
-            'getHierarchy <object.property>',
-            'setHierarchy <object.property> <xml>',
+            #'getHierarchy <object.property>',
+            #'setHierarchy <object.property> <xml>',
             'deleteRunShare <key> (NOT IMPLEMENTED)',
             'getBranchesAndTags (NOT IMPLEMENTED)',
             'getQueues <category/component> [full] (NOT IMPLEMENTED)',
@@ -242,69 +252,63 @@ version: 7.0, build: 42968"""
         self.assertEqual(result, expected)
 
     def test_invoke(self):
-        self.client.start('TestComponent', 'comp')
-        result = self.client.invoke('comp.reinitialize')
+        self.client.start('d2/d3/TestCompProblem', 'prob')
+        result = self.client.invoke('prob.comp.reinitialize')
         self.assertEqual(result, '')
-        result = self.client.invoke('comp.float_method')
+        result = self.client.invoke('prob.comp.float_method')
         self.assertEqual(result, '5')
-        result = self.client.invoke('comp.null_method')
+        result = self.client.invoke('prob.comp.null_method')
         self.assertEqual(result, '')
-        result = self.client.invoke('comp.str_method')
+        result = self.client.invoke('prob.comp.str_method')
         self.assertEqual(result,
                          'current state: x 2.0, y 3.0, z 0.0, exe_count 0')
 
     def test_list_array_values(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         try:
             self.client.list_array_values('comp')
         except Exception as err:
-            self.assertEqual(str(err), "Exception: NotImplementedError('listArrayValues',)")
+            self.assertTrue('NotImplementedError' in str(err))
+            self.assertTrue('listArrayValues' in str(err))
 
     def test_list_categories(self):
         result = self.client.list_categories('/')
-        self.assertEqual(result, ['openmdao'])
-        result = self.client.list_categories('/openmdao')
-        self.assertEqual(result, ['components'])
+        self.assertEqual(result, ['d2'])
+        result = self.client.list_categories('/d2')
+        self.assertEqual(result, ['d3'])
 
     def test_list_components(self):
         result = self.client.list_components()
 
         self.assertEqual(sorted(result),
-                         ['TestComponent',
-                          'openmdao/components/exec_comp/ExecComp'])
+                         ['d2/d3/TestCompProblem'])
 
     def test_list_globals(self):
         result = self.client.list_globals()
         self.assertEqual(result, [])
 
     def test_list_methods(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         result = self.client.list_methods('comp')
-        self.assertTrue("add_param" in result, "can't find add_param in 'comp'")
-        self.assertTrue("add_state" in result, "can't find add_state in 'comp'")
-        self.assertTrue("linearize" in result, "can't find linearize in 'comp'")
-        self.assertTrue("solve_nonlinear" in result, "can't find solve_nonlinear in 'comp'")
-        self.assertTrue("float_method" in result, "can't find float_method in 'comp'")
-        self.assertTrue("str_method" in result, "can't find str_method in 'comp'")
-        self.assertTrue("int_method" in result, "can't find int_method in 'comp'")
+        #logging.info("RESULT: %s" % result)
+        self.assertTrue("comp.float_method" in result, "can't find float_method in 'comp'")
+        self.assertTrue("comp.str_method" in result, "can't find str_method in 'comp'")
+        self.assertTrue("comp.int_method" in result, "can't find int_method in 'comp'")
 
         result = self.client.list_methods('comp', full=True)
-        self.assertTrue(("add_param", "TestComponent/add_param") in result, "can't find add_param in 'comp'")
-        self.assertTrue(("add_state", "TestComponent/add_state") in result, "can't find add_state in 'comp'")
-        self.assertTrue(("linearize", "TestComponent/linearize") in result, "can't find linearize in 'comp'")
-        self.assertTrue(("solve_nonlinear", "TestComponent/solve_nonlinear") in result, "can't find solve_nonlinear in 'comp'")
-        self.assertTrue(("float_method", "TestComponent/float_method") in result, "can't find float_method in 'comp'")
-        self.assertTrue(("str_method", "TestComponent/str_method") in result, "can't find str_method in 'comp'")
-        self.assertTrue(("int_method", "TestComponent/int_method") in result, "can't find int_method in 'comp'")
+        #logging.info("RESULT: %s" % result)
+        self.assertTrue(("comp.float_method", "TestCompProblem/comp.float_method") in result, "can't find float_method in 'comp'")
+        self.assertTrue(("comp.str_method", "TestCompProblem/comp.str_method") in result, "can't find str_method in 'comp'")
+        self.assertTrue(("comp.int_method", "TestCompProblem/comp.int_method") in result, "can't find int_method in 'comp'")
 
     def test_list_monitors(self):
-        self.client.start('TestComponent', 'comp')
-        result = self.client.list_monitors('comp')
-        self.assertTrue('hosts.allow' in result)
-        self.assertTrue('openmdao_log.txt' in result)
+        self.client.start('d2/d3/TestCompProblem', 'comp')
+        result = sorted(self.client.list_monitors('comp'))
+        self.assertEqual('hosts.allow', result[1])
+        self.assertTrue(fnmatch.fnmatch(result[0], 'as-*.out'))
 
     def test_list_properties(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         result = self.client.list_properties()
         self.assertEqual(result, ['comp'])
 
@@ -371,19 +375,23 @@ version: 7.0, build: 42968"""
         self.assertEqual(result, expected)
 
     def test_monitor(self):
-        self.client.start('TestComponent', 'comp')
-        result, monitor_id = self.client.start_monitor('comp.d2/d3/TestComponents.cfg')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
+        result, monitor_id = self.client.start_monitor('comp.d2/d3/TestCompProblem.cfg')
         expected = """\
-[TestComponent]
+[AnalysisServer]
 version: 0.2
 filename: ASTestComp.py
 comment: Initial version.
 author: anonymous  ( & < > )
 description: Component for testing AnalysisServer functionality.
     An additional description line.  ( & < > )
-
-[openmdao.components.exec_comp.ExecComp]
-args: y=2.0*x
+in_vars: in_* x y obj_input:* sub_group:*
+out_vars: out_* z exe_* obj_output:*
+methods: comp.reinitialize
+   comp.float_method
+   comp.null_method
+   comp.str_method
+   comp.int_method
 """
         self.assertEqual(result[:len(expected)], expected)
 
@@ -391,7 +399,7 @@ args: y=2.0*x
 
 #     def test_set_hierarchy(self):
 #         # Grab value of obj_input (big XML string).
-#         reply = self.client.start('TestComponent', 'comp')
+#         reply = self.client.start('d2/d3/TestCompProblem', 'comp')
 #         reply = self.client.get('comp.obj_input')
 #         obj_input = reply[:-3]
 #
@@ -424,7 +432,9 @@ args: y=2.0*x
         try:
             self.client.move('from', 'to')
         except Exception as err:
-            self.assertEqual(str(err), "Exception: NotImplementedError('move',)")
+            self.assertTrue('NotImplementedError' in str(err))
+            self.assertTrue('move' in str(err))
+
         else:
             self.fail("Exception expected")
 
@@ -438,20 +448,19 @@ args: y=2.0*x
             'WallTime': 0.,
             'Command': os.path.basename(sys.executable),
         }]
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         process_info = self.client.ps('comp')
         self.assertEqual(process_info, expected)
 
     def test_set(self):
-        self.client.start('TestComponent', 'comp')
+        self.client.start('d2/d3/TestCompProblem', 'comp')
         self.client.set('comp.x', '42')
         self.assertEqual(self.client.get('comp.x'), '42')
 
     def test_set_mode(self):
         self.client.set_mode_raw()
         result = self.client.list_components()
-        self.assertEqual(result, ['TestComponent',
-                                  'openmdao/components/exec_comp/ExecComp'])
+        self.assertEqual(result, ['d2/d3/TestCompProblem'])
 
         self.assertTrue(self.client._stream.raw)
 
@@ -464,12 +473,12 @@ args: y=2.0*x
             self.fail("Exception expected")
 
     def test_start(self):
-        reply = self.client.start('TestComponent', 'comp')
+        reply = self.client.start('d2/d3/TestCompProblem', 'comp')
         self.assertEqual("Object comp started.", reply)
 
     def test_versions(self):
 
-        reply = self.client.versions('TestComponent')
+        reply = self.client.versions('d2/d3/TestCompProblem')
         self.assertEqual(reply, ['0.2'])
 
         try:

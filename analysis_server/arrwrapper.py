@@ -66,7 +66,7 @@ class ArrayBase(VarWrapper):
         path: string
             External reference to property.
         """
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             value = self._sysproxy.get(self._name)
             if self.typ == float:
                 fmt = '%.16g'
@@ -151,7 +151,7 @@ class ArrayBase(VarWrapper):
         gzipped: bool
             If True, file data is gzipped and then base64 encoded.
         """
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             if self.typ == str:
                 valstr = valstr.decode('string_escape')
             if self._is_array:

@@ -42,7 +42,7 @@ from analysis_server.varwrapper import VarWrapper, _register
 #         path: string
 #             External reference to property.
 #         """
-#         if attr == 'value':
+#         if attr == self._name or attr == 'value':
 #             obj = self._sysproxy.get(self._name)
 #             xml = get_as_xml(obj)
 #             return xml
@@ -83,7 +83,7 @@ from analysis_server.varwrapper import VarWrapper, _register
 #         gzipped: bool
 #             If True, file data is gzipped and then base64 encoded.
 #         """
-#         if attr == 'value':
+#         if attr == self._name or attr == 'value':
 #             obj = self._cls(iotype=self._iotype)
 #             set_from_xml(obj, valstr.decode('string_escape'))
 #             self._sysproxy.set(self._name, obj)

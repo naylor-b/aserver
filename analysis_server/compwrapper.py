@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import logging
+import traceback
 
 import xml.etree.cElementTree as ElementTree
 from xml.sax.saxutils import escape
@@ -14,6 +15,8 @@ try:
     import resource
 except ImportError:  # pragma no cover
     pass  # Not available on Windows.
+
+import openmdao.util.log
 
 from analysis_server.varwrapper import _find_var_wrapper, _float2str
 from analysis_server.monitor import FileMonitor
@@ -72,7 +75,7 @@ class ComponentWrapper(object):
         self._path_map = {}  # Maps from external path to (var wrapper, attr).
         self._start = None
         self._rusage = None  # For ps() on UNIX.
-        self._logger = logging.getLogger(name)
+        self._logger = logging.getLogger(name+'_wrapper')
 
     def _get_var_wrapper(self, ext_path):
         """
@@ -91,8 +94,8 @@ class ComponentWrapper(object):
                 epath = ext_path
             else:
                 epath, _, ext_attr = ext_path.rpartition('.')
-                if epath in self._cfg.properties:
-                    int_path = self._cfg.properties[epath]
+                if ext_attr in self._cfg.properties:
+                    int_path = self._cfg.properties[ext_attr]
                 else:
                     raise RuntimeError('no such property <%s>.' % ext_path)
             try:
@@ -143,8 +146,8 @@ class ComponentWrapper(object):
                 self._send_reply('%s completed.' % self._name, req_id)
             finally:
                 self._start = None
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def get(self, path, req_id):
         """
@@ -159,8 +162,8 @@ class ComponentWrapper(object):
         try:
             wrapper, attr = self._get_var_wrapper(path)
             self._send_reply(wrapper.get(attr, path), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def get_hierarchy(self, req_id, gzipped):
         """
@@ -197,8 +200,8 @@ class ComponentWrapper(object):
                     raise type(exc)("Can't get %r: %s %s" % (path, vwrapper,exc))
             lines.append('</Group>')
             self._send_reply('\n'.join(lines), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def invoke(self, method, full, req_id):
         """
@@ -240,8 +243,8 @@ class ComponentWrapper(object):
 </response>""" % escape(reply)
 
             self._send_reply(reply, req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def list_array_values(self, path, req_id):
         """
@@ -255,8 +258,8 @@ class ComponentWrapper(object):
         """
         try:
             raise NotImplementedError('listArrayValues')
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def list_methods(self, full, req_id):
         """
@@ -273,13 +276,13 @@ class ComponentWrapper(object):
             for name in sorted(self._cfg.methods):
                 line = '%s()' % name
                 if full:
-                    line += ' fullName="%s/%s"' % (self._cfg.section, name)
+                    line += ' fullName="%s/%s"' % (self._cfg.classname, name)
                 lines.append(line)
 
             lines[0] = '%d methods found:' % (len(lines)-1)
             self._send_reply('\n'.join(lines), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def list_monitors(self, req_id):
         """
@@ -294,8 +297,8 @@ class ComponentWrapper(object):
             lines = ['%d monitors:' % len(text_files)]
             lines.extend(sorted(text_files))
             self._send_reply('\n'.join(lines), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def list_properties(self, path, req_id):
         """
@@ -310,8 +313,8 @@ class ComponentWrapper(object):
         """
         try:
             self._send_reply(self._list_properties(path), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def _list_properties(self, path):
         """
@@ -330,7 +333,7 @@ class ComponentWrapper(object):
                 path += '.'
             length = len(path)
             groups = set()
-            for ext_path in sorted(self._cfg.properties.keys()):
+            for ext_path in sorted(self._cfg.properties):
                 if path and not ext_path.startswith(path):
                     continue
                 name = ext_path[length:]
@@ -400,8 +403,8 @@ class ComponentWrapper(object):
                             lines.append('%s %s %s  vLen=%d  val=%s'
                                          % (name, typ, access, len(val), val))
             self._send_reply('\n'.join(lines), req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def list_values_url(self, path, req_id):
         """
@@ -433,8 +436,8 @@ class ComponentWrapper(object):
                                   req_id, self._send_reply)
             monitor.start()
             self._monitors[str(req_id)] = monitor  # Monitor id is request id.
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def stop_monitor(self, monitor_id, req_id):
         """
@@ -521,8 +524,8 @@ class ComponentWrapper(object):
                    escape(command))
 
             self._send_reply(reply, req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def set(self, path, valstr, req_id):
         """
@@ -543,8 +546,8 @@ class ComponentWrapper(object):
         try:
             self._set(path, valstr)
             self._send_reply('value set for <%s>' % path, req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)
 
     def _set(self, path, valstr, gzipped=False):
         """
@@ -588,5 +591,5 @@ class ComponentWrapper(object):
                     raise type(exc)("Can't set %r from %r: %s"
                                     % (var.attrib['name'], valstr[:1000], exc))
             self._send_reply('values set', req_id)
-        except Exception as exc:
-            self._send_exc(exc, req_id)
+        except Exception:
+            self._send_exc(traceback.format_exc(), req_id)

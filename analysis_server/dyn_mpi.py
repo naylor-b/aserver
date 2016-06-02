@@ -3,7 +3,7 @@ import traceback
 
 from mpi4py import MPI
 
-from analysis_server.proxy import SystemWrapper
+from analysis_server.proxy import ProblemProxy
 
 def worker_loop(sw):
     """This will loop while receiving commands from the parent MPI process.
@@ -11,7 +11,7 @@ def worker_loop(sw):
     Args
     ----
 
-    sw : SystemWrapper
+    sw : ProblemProxy
         Wrapper object for a particular Problem.
     """
     comm = MPI.Comm.Get_parent()
@@ -30,7 +30,6 @@ def worker_loop(sw):
             result = None
             tb = traceback.format_exc()
 
-        # parent will send cmd to terminate us if any child has an error.
         comm.gather((result, tb), root=0)
 
 
@@ -65,7 +64,7 @@ if __name__ == '__main__':
         pass_args = ()
 
 
-    sw = SystemWrapper()
+    sw = ProblemProxy()
     sw.init(classname, instaname, filename=filename, directory=directory, args=args)
 
     worker_loop(sw)

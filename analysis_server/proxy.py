@@ -11,22 +11,25 @@ from openmdao.core.problem import Problem
 from openmdao.core.fileref import FileRef
 from openmdao.core.group import Group
 from openmdao.util.file_util import DirContext
+import openmdao.util.log
 
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
 
-class SystemWrapper(object):
+class ProblemProxy(object):
 
     def init(self, classname, instname, fpath=None, directory='', args=()):
-        self.problem, self.system = _setup_obj(classname, instname, fpath,
-                                               directory, args=args)
+        self.problem = _setup_obj(classname, instname, fpath,
+                                  directory, args=args)
+        self.system = self.problem.root
+        self._logger = logging.getLogger(instname+'_proxy')
 
     def set(self, name, value):
-        if name in self.system.params:
-            self.system.params[name] = value
-        else: # try to find a matching Problem attribute
+        try:
+            self.problem[name] = value
+        except:
             parts = name.split('.')
             obj = self.problem
             for n in parts[:-1]:
@@ -34,27 +37,37 @@ class SystemWrapper(object):
             setattr(obj, parts[-1], value)
 
     def get(self, name):
-        if name in self.system.unknowns:
-            return self.system.unknowns[name]
-        elif name in self.system.params:
-            return self.system.params[name]
-        else:  # try to find a matching Problem attribute
+        try:
+            ret = self.problem[name]
+            #self._logger.info("returning prob[%s] = %s" % (name,ret))
+            return ret
+        except:
+            #self._logger.info("GETTING attr: %s" % name)
             obj = self.problem
             for n in name.split('.'):
                 obj = getattr(obj, n)
             return obj
 
     def invoke(self, name):
-        return getattr(self.system, name)()
+        #self._logger.info("INVOKING: %s" % name)
+        obj = self.problem
+        try:
+            for n in name.split('.'):
+                obj = getattr(obj, n)
+        except AttributeError: # look in root object next
+            obj = self.problem.root
+            for n in name.split('.'):
+                obj = getattr(obj, n)
+        return obj()
 
     def get_pathname(self):
-        return self.system.pathname
+        return self.problem.pathname
 
     def run(self):
         self.problem.run()
 
     def write(self, name, value):
-        fileref = self.system.params[name]
+        fileref = self.problem[name]
         if isinstance(fileref, FileRef):
             fileref.write(value)
         else:
@@ -79,7 +92,7 @@ class SystemWrapper(object):
         path: string
             Path to file to interrogate.
         """
-        logging.debug('stat %r', path)
+        self._logger.debug('stat %r', path)
         try:
             return os.stat(path)
         except Exception as exc:
@@ -109,35 +122,37 @@ class SystemWrapper(object):
         return self.system._sysdata.absdir
 
     def get_description(self, name):
-        if name in self.system.unknowns:
-            meta = self.system.unknowns._dat[name].meta
-        else:
-            meta = self.system.params._dat[name].meta
+        meta = self.get_metadata(name)
         return meta.get('desc', '')
 
     def get_metadata(self, name):
+        #logging.info("get_metadata(%s)" % name)
         if name in self.system.unknowns:
-            meta = self.system.unknowns._dat[name].meta
+            return self.system.unknowns._dat[name].meta
         else:
-            meta = self.system.params._dat[name].meta
-        return meta
+            pdict = self.system._params_dict # this contains all model params
+            to_abs = self.system._sysdata.to_abs_pnames
+            if name in to_abs:
+                for p in to_abs[name]:
+                    if p in pdict:
+                        return pdict[p]
+        return {}
 
     def set_name(self, name):
-        self.system.name = name
+        self.problem.name = name
 
     def pre_delete(self):
         if hasattr(self.system, 'pre_delete'):
             self.system.pre_delete()
 
 
-class DynMPISystemWrapper(SystemWrapper):
+class DynMPIProblemProxy(ProblemProxy):
     """Wrapper for a Problem that requires multiple MPI processes. These
     processes are allocated dynamicallly using MPI.COMM_SELF.Spawn().
     """
 
     def init(self, num_procs, classname, instname, fpath=None, directory='',
              args=()):
-        print("DYNMPISYSWRAPPER!")
         mydir = os.path.dirname(os.path.abspath(__file__))
         dynmod = os.path.join(mydir, 'dyn_mpi.py')
         dynargs = [dynmod, classname, instname]
@@ -146,12 +161,14 @@ class DynMPISystemWrapper(SystemWrapper):
         if directory:
             dynargs.append("directory=%s" % directory)
         dynargs.extend(args)
+        self._logger = logging.getLogger(instname+'_proxy')
 
         self.comm = MPI.COMM_SELF.Spawn(sys.executable,
                                         args=dynargs,
                                         maxprocs=num_procs)
 
     def _do_cmd(self, cmd, *args):
+        self._logger.debug("bcasting: %s" % cmd)
         self.comm.bcast((cmd, args), root=MPI.ROOT)
         results = self.comm.gather(None, root=MPI.ROOT)
         for r, tb in results:
@@ -227,8 +244,8 @@ class SysManager(BaseManager):
     pass
 
 
-SysManager.register('SystemWrapper', SystemWrapper)
-SysManager.register('DynMPISystemWrapper', DynMPISystemWrapper)
+SysManager.register('ProblemProxy', ProblemProxy)
+SysManager.register('DynMPIProblemProxy', DynMPIProblemProxy)
 
 
 def _setup_obj(classname, instname, filename=None, directory='', args=()):
@@ -254,6 +271,8 @@ def _setup_obj(classname, instname, filename=None, directory='', args=()):
         sys.path.pop(0)
 
     module = sys.modules[modname]
+    # strip categories from classname
+    classname = classname.rsplit('/', 1)[-1]
     try:
         cls = getattr(module, classname)
     except AttributeError as exc:
@@ -262,22 +281,16 @@ def _setup_obj(classname, instname, filename=None, directory='', args=()):
 
     with DirContext(dirname):
         try:
-            obj = cls(*args)
+            p = cls(*args)
         except Exception as exc:
             logging.error(traceback.format_exc())
             raise RuntimeError("Can't instantiate %s.%s: %r"
                                % (modname, classname, exc))
 
-        if isinstance(obj, Problem):
-            p = obj
-            obj = p.root
-        else:
-            if isinstance(obj, Group) and not instname:
-                p = Problem(root=obj)
-            else:
-                p = Problem(root=Group())
-                p.root.add(instname, obj)
+        if not isinstance(p, Problem):
+            raise TypeError("Wrapped instance must be a Problem and not a %s" % type(p))
 
+        p.name = instname
         p.setup(check=False)
 
-    return p, obj
+    return p

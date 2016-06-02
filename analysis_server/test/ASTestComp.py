@@ -251,12 +251,16 @@ class TestComponent(Component, ASMixin):
                    % (self.params['x'], self.params['y'], self.unknowns['z'],
                        self.unknowns['exe_count'])
 
+class TestCompProblem(Problem):
+    def __init__(self):
+        super(TestCompProblem, self).__init__()
+        self.root = Group()
+        comp = self.root.add('comp', TestComponent(), promotes=['*'])
+        comp._init_params_dict['in_file']['val'].fname = 'TestCompProblem.cfg'
+
 
 if __name__ == '__main__':
-    p = Problem(root=Group())
-    top = p.root
-    comp = top.add('comp', TestComponent())
-    comp._init_params_dict['in_file']['val'].fname = 'TestComponents.cfg'
+    p = TestCompProblem()
     p.setup(check=False)
     p.run()
     for n,v in iteritems(p.root._params_dict):
@@ -264,4 +268,3 @@ if __name__ == '__main__':
     print("------------")
     for n,v in iteritems(p.root._unknowns_dict):
         print(n,v['val'])
-

@@ -56,7 +56,7 @@ from analysis_server.varwrapper import VarWrapper, _register, _float2str
 #         path: string
 #             External reference to property.
 #         """
-#         if attr == 'value' or attr == 'valueStr':
+#         if attr == self._name or attr == 'value' or attr == 'valueStr':
 #             if self._py_type == float:
 #                 return _float2str(self._sysproxy.get(self._name))
 #             else:
@@ -140,7 +140,7 @@ from analysis_server.varwrapper import VarWrapper, _register, _float2str
 #             If True, file data is gzipped and then base64 encoded.
 #         """
 #         valstr = valstr.strip('"')
-#         if attr == 'value':
+#         if attr == self._name or attr == 'value':
 #             try:
 #                 i = self._trait.aliases.index(valstr)
 #             except (AttributeError, ValueError):

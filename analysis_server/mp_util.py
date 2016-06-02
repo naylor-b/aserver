@@ -21,6 +21,7 @@ from multiprocessing import current_process, connection
 from multiprocessing.managers import BaseProxy
 
 from openmdao.util.shell_proc import ShellProc, STDOUT, PIPE
+import openmdao.util.log
 
 from analysis_server.publickey import decode_public_key, is_private, HAVE_PYWIN32
 

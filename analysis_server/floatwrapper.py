@@ -21,7 +21,7 @@ class FloatWrapper(VarWrapper):
         path: string
             External reference to property.
         """
-        if attr == 'value' or attr == 'valueStr':
+        if attr == self._name or attr == 'value' or attr == 'valueStr':
             return _float2str(self._sysproxy.get(self._name))
         else:
             return super(FloatWrapper, self).get(attr, path)
@@ -56,7 +56,7 @@ class FloatWrapper(VarWrapper):
             If True, file data is gzipped and then base64 encoded.
         """
         valstr = valstr.strip('"')
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             self._sysproxy.set(self._name, float(valstr))
         elif attr in ('valueStr', 'description', 'enumAliases', 'enumValues'
                       'format', 'hasLowerBound', 'lowerBound',

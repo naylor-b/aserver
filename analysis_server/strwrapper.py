@@ -22,7 +22,7 @@ class StrWrapper(VarWrapper):
         path: string
             External reference to property.
         """
-        if attr == 'value' or attr == 'valueStr':
+        if attr == self._name or attr == 'value' or attr == 'valueStr':
             return self._sysproxy.get(self._name).encode('string_escape')
         elif attr == 'enumValues':
             return ''
@@ -59,7 +59,7 @@ class StrWrapper(VarWrapper):
         gzipped: bool
             If True, file data is gzipped and then base64 encoded.
         """
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             self._sysproxy.set(self._name,
                                 valstr.decode('string_escape').strip('"'))
         elif attr in ('valueStr', 'description', 'enumAliases', 'enumValues'):

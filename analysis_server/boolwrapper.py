@@ -24,7 +24,7 @@ class BoolWrapper(VarWrapper):
         path: string
             External reference to property.
         """
-        if attr == 'value' or attr == 'valueStr':
+        if attr == self._name or attr == 'value' or attr == 'valueStr':
             return 'true' if self._sysproxy.get(self._name) else 'false'
         else:
             return super(BoolWrapper, self).get(attr, path)
@@ -58,7 +58,7 @@ class BoolWrapper(VarWrapper):
             If True, file data is gzipped and then base64 encoded.
         """
         valstr = valstr.strip('"')
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             if valstr == 'true':
                 self._sysproxy.set(self._name, True)
             elif valstr == 'false':

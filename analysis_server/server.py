@@ -43,6 +43,7 @@ import socket
 import threading
 import time
 import traceback
+import fnmatch
 
 from xml.sax.saxutils import escape
 
@@ -53,6 +54,7 @@ from openmdao.api import Component, Group, Problem
 
 from openmdao.util.shell_proc import ShellProc, STDOUT
 from openmdao.util.file_util import DirContext
+import openmdao.util.log
 
 from analysis_server.stream  import Stream
 from analysis_server.wrkpool import WorkerPool
@@ -63,7 +65,7 @@ from analysis_server.compwrapper import ComponentWrapper
 from analysis_server.monitor import Heartbeat
 
 # from analysis_server.filexfer import filexfer
-from analysis_server.proxy import SystemWrapper, SysManager
+from analysis_server.proxy import ProblemProxy, SysManager
 
 try:
     from mpi4py import MPI
@@ -136,13 +138,15 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     allow_reuse_address = True
 
     def __init__(self, host='localhost', port=DEFAULT_PORT, allowed_hosts=None,
-                 available_systems=(), config_files=()):
+                 configs=()):
+        self._logger = logging.getLogger('tcpserver')
         count = 0
         while count < 10:
             try:
                 SocketServer.TCPServer.__init__(self, (host, port), _Handler)
             except socket.error as err:
                 if 'already in use' in str(err):
+                    self._logger.warning("port %s already in use. Trying another..." % port)
                     port += 1
                     count += 1
             else:
@@ -158,14 +162,14 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self._root = os.getcwd()
         self._dir_lock = threading.RLock()
         self._config_errors = 0
-        #self._read_comp_configurations()
-        for f in config_files:
-            print("reading config:", f)
-            self.read_config(f)
-
-        # Set False in test_server.py to avoid issues trying to clean up
-        # the 'logs' directory under Windows.
-        self.per_client_loggers = True
+        self._startdir = os.getcwd()
+        for config in configs:
+            config = os.path.abspath(config)
+            if os.path.isdir(config):
+                self.read_config_dir(config)
+            else:
+                self._cfg_top = os.path.dirname(config)
+                self.read_config(config)
 
     @property
     def dir_lock(self):
@@ -192,17 +196,29 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         """ Number of configuration errors detected. """
         return self._config_errors
 
+    def read_config_dir(self, dpath):
+        """ Read component configuration files. """
+        self._cfg_top = dpath
+
+        for dirpath, dirnames, filenames in os.walk(dpath):
+            for name in sorted(fnmatch.filter(filenames, '*.cfg')):
+                path = os.path.join(dirpath, name)
+                self._logger.info('Reading config file %s' % path)
+                try:
+                    self.read_config(path)
+                except Exception:
+                    print(traceback.format_exc())
+                    self._logger.error(traceback.format_exc())
+                    self._config_errors += 1
+
     def read_config(self, path):
         """
         Read component configuration file.
 
         path: string
-            Path to config file.
+            Absolute path to config file.
 
         """
-        path = os.path.abspath(path)
-
-        logging.info('Reading config file %r', path)
         config = ConfigParser.SafeConfigParser(_CONFIG_DEFAULTS)
         config.optionxform = str  # Preserve case.
         files = config.read(path)
@@ -215,42 +231,37 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             if directory:
                 os.chdir(directory)
             try:
-                for section in config.sections():
-                    self._process_config(config, section, path)
+                self._process_config(config, path)
             finally:
                 os.chdir(orig)
 
-    def _process_config(self, config, section, path):
+    def _process_config(self, config, path):
         """
         Process data read into `config` from `path`.
 
         config: :class:`ConfigParser.ConfigParser`
             Configuration data.
 
-        section: str
-            The section in the config file, which corresponds to
-            the data for a particular class.
-
         path: string
-            Path to config file.
+            Abs path to config file.
 
         """
         cwd = os.getcwd()
+        classname = os.path.splitext(os.path.basename(path))[0]
 
         # Create wrapper configuration object.
-        cfg_path = os.path.join(cwd, os.path.basename(path))
         try:
-            cfg = _ConfigWrapper(config, section,
-                                 time.ctime(os.path.getmtime(cfg_path))
-)
+            cfg = _ConfigWrapper(classname, config, time.ctime(os.path.getmtime(path)))
         except Exception as exc:
-            logging.error(traceback.format_exc())
-            raise RuntimeError("Bad configuration in %r: %s" % (cfg_path, exc))
+            self._logger.error(traceback.format_exc())
+            raise RuntimeError("Bad configuration in %r: %s" % (path,
+                                                       traceback.format_exc()))
 
-        logging.debug('    registering %s', section)
+        comp_path = os.path.splitext(os.path.relpath(path, start=self._cfg_top))[0]
+
+        self._logger.debug('    registering comp %s', comp_path)
         with self.components as comps:
-            comps[section.replace('.', '/')] = (cfg, cfg.directory)
-
+            comps[comp_path] = (cfg, cfg.directory)
 
     # This will be exercised by client side tests.
     def finish_request(self, request, client_address):  # pragma no cover
@@ -265,18 +276,18 @@ class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             Source of client request.
         """
         host, port = client_address
-        logging.info('Connection from %s:%s', host, port)
+        self._logger.info('Connection from %s:%s', host, port)
         self._num_clients += 1
         try:
             SocketServer.TCPServer.finish_request(self, request, client_address)
         finally:
-            logging.info('Disconnect %s:%s', host, port)
+            self._logger.info('Disconnect %s:%s', host, port)
             self._num_clients -= 1
             with self.handlers as handlers:
                 try:  # It seems handler.finish() isn't called on disconnect...
                     handlers[client_address].cleanup()
                 except Exception, exc:
-                    logging.warning('Exception during handler cleanup: %r', exc)
+                    self._logger.warning('Exception during handler cleanup: %r', exc)
 
 
 class _Handler(SocketServer.BaseRequestHandler):
@@ -297,19 +308,9 @@ class _Handler(SocketServer.BaseRequestHandler):
         self._instance_map = {}  # Maps from name to (wrapper, worker).
         #set_credentials(self.server.credentials)
 
-        # Set up separate logger for each client.
-        if self.server.per_client_loggers:  # pragma no cover
-            self._logger = logging.getLogger('%s:%s' % self.client_address)
-            self._logger.setLevel(logging.getLogger().getEffectiveLevel())
-            self._logger.propagate = False
-            formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s',
-                                          '%b %d %H:%M:%S')
-            filename = os.path.join('logs', '%s_%s.txt' % self.client_address)
-            handler = logging.FileHandler(filename, mode='w')
-            handler.setFormatter(formatter)
-            self._logger.addHandler(handler)
-        else:
-            self._logger = logging
+        self._logger = logging.getLogger('handler')
+        formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s',
+                                      '%b %d %H:%M:%S')
 
         self._centerlink_dict = {}  # Used for testing 'setDictionary'.
 
@@ -369,7 +370,7 @@ version: %s""" % _VERSION)
                     try:
                         cmd(self, args[1:])
                     except Exception as exc:
-                        self._send_exc(exc)
+                        self._send_exc(traceback.format_exc())
 
                 except EOFError:
                     break
@@ -395,10 +396,9 @@ version: %s""" % _VERSION)
         name, _, version = typ.partition('?')
         try:
             with self.server.components as comps:
-                logging.error("KEYS: %s" % comps.keys())
                 return comps[name]
         except KeyError:
-            logging.error("KEYERROR: %s" % name)
+            self._logger.error("KEYERROR: %s" % name)
             pass
 
         if not '/' in typ:  # Just to match real AnalysisServer.
@@ -861,12 +861,12 @@ Available Commands:
    getByUrl <object.property> <url> (NOT IMPLEMENTED)
    setByUrl <object.property> = <url> (NOT IMPLEMENTED)
    setDictionary <xml dictionary string> (xml accepted, but not used)
-   getHierarchy <object.property>
-   setHierarchy <object.property> <xml>
    deleteRunShare <key> (NOT IMPLEMENTED)
    getBranchesAndTags (NOT IMPLEMENTED)
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
+   # getHierarchy <object.property>
+   # setHierarchy <object.property> <xml>
 
     def _invoke(self, args):
         """
@@ -881,7 +881,7 @@ Available Commands:
             return
 
         name, _, method = args[0].partition('.')
-        method = method[:-2]
+        method = method[:-2] # get rid of () at end of name
         full = len(args) == 2 and args[1] == 'full'
         proxy, worker = self._get_proxy(name)
         if proxy is not None:
@@ -926,7 +926,9 @@ Available Commands:
 
         lines = set()
         with self.server.components as comps:
-            for name in sorted(comps.keys()):
+            #logging.info("CATEGORY: %s" % category)
+            for name in sorted(comps):
+                #logging.info("NAME: %s" % name)
                 if name.startswith(category):
                     name = name[len(category):]
                     slash = name.find('/')
@@ -1133,11 +1135,12 @@ Available Commands:
         """
         cmd, _, assignment = self._req.partition(' ')
         lhs, _, rhs = assignment.partition('=')
-        name, _, path = lhs.strip().partition('.')
+        lhs = lhs.strip()
+        name, _, path = lhs.partition('.')
         wrapper, worker = self._get_proxy(name)
         if wrapper is not None:
             worker.put((wrapper.set,
-                        (path, rhs.strip(), self._req_id), {}, None))
+                        (lhs, rhs.strip(), self._req_id), {}, None))
 
     # def _set_hierarchy(self, args):
     #     """
@@ -1184,6 +1187,7 @@ Available Commands:
 
         cfg, directory = self._get_component(args[0])
         if cfg is None:
+            self._logger.warning("Couldn't find component %s" % args[0])
             return
 
         classname = args[0]
@@ -1201,9 +1205,9 @@ Available Commands:
             manager = SysManager()
             manager.start()
             if MPI and cfg.num_procs > 1:
-                proxy = manager.DynMPISystemWrapper()
+                proxy = manager.DynMPIProblemProxy()
             else:
-                proxy = manager.SystemWrapper()
+                proxy = manager.ProblemProxy()
             proxy.init(classname, name, cfg.filename, directory=directory)
 
         # Create wrapper for component.
@@ -1308,7 +1312,7 @@ Available Commands:
 
 
 def start_server(address='localhost', port=None, allowed_hosts=None,
-                 debug=False, args=()):
+                 debug=False, server_out=None, args=()):
     """
     Start server process at `address` and `port`.
     Returns ``(proc, port)``.
@@ -1342,7 +1346,8 @@ def start_server(address='localhost', port=None, allowed_hosts=None,
 
     server_path = os.path.splitext(os.path.abspath(__file__))[0]+'.py'
 
-    server_out = 'as-%d.out' % port
+    if server_out is None:
+        server_out = 'as-%d.out' % port
     server_up = 'as-%d.up' % port
     if os.path.exists(server_up):
         os.remove(server_up)
@@ -1352,6 +1357,8 @@ def start_server(address='localhost', port=None, allowed_hosts=None,
             '--address', address, '--port', '%d' % port, '--up', server_up] + args
     if debug:
         args.append('--debug')
+
+    logging.info("start_server: args=%s" % args)
 
     #print("starting ShellProc:",args)
     proc = ShellProc(args, stdout=server_out, stderr=STDOUT)
@@ -1440,8 +1447,7 @@ def main():  # pragma no cover
                        help="if non-null, file written when server is 'up'")
 
     parser.add_argument('-c', '--config', type=str, nargs="*", default=[],
-                        help='config file(s) containing info about systems that '
-                        'will be available in this server.')
+                        help='config file or config directory to search for config files')
     parser.add_argument('-s', '--system', type=str, nargs="*", default=[],
                         help='classnames of importable systems that will be '
                         'available in this server.')
@@ -1476,8 +1482,7 @@ def main():  # pragma no cover
     # Create server.
     host = options.address or socket.gethostname()
     server = Server(host, options.port, allowed_hosts,
-                    config_files=options.config,
-                    available_systems=options.system)
+                    configs=options.config)
     if server.config_errors:
         print('%d component configuration errors detected.'
                % server.config_errors)
@@ -1516,7 +1521,6 @@ def _sigterm_handler(signum, frame):  #pragma no cover
         Where signal was received.
     """
     logging.info('sigterm_handler invoked')
-    print('sigterm_handler invoked')
     sys.stdout.flush()
     sys.exit(1)
 

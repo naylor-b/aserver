@@ -5,6 +5,7 @@ is referenced.
 
 import logging
 from xml.sax.saxutils import escape, quoteattr
+import openmdao.util.log
 
 # Mapping from OpenMDAO variable type to wrapper type.
 _TYPE_MAP = {}

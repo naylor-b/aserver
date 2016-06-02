@@ -4,8 +4,13 @@ import sys
 import time
 import logging
 from inspect import getmembers, ismethod, isfunction
+from itertools import chain
+from fnmatch import fnmatchcase
 
 from six import iteritems
+
+from openmdao.core.problem import Problem
+import openmdao.util.log
 
 from analysis_server.varwrapper import _find_var_wrapper
 from analysis_server.proxy import _setup_obj
@@ -22,8 +27,36 @@ _CONFIG_DEFAULTS = {
     'args': '',
     'directory': None,
     'filename': None,
+    'in_attrs': '',
+    'out_attrs': '',
+    'in_vars': '',
+    'out_vars': '*',
+    'methods': '',
 }
 
+# maps option names from cfg file to attribute names in the wrapper
+_CFG_MAP = {
+    'in_vars': 'in_var_patterns',
+    'out_vars': 'out_var_patterns',
+}
+
+def _str2list(string):
+    lst = []
+    for s in string.split():
+        ss = s.strip()
+        if ss:
+            lst.append(ss)
+    return lst
+
+def _get_match(name, patterns):
+    for p in patterns:
+        if fnmatchcase(name, p):
+            return name.replace(':', '.')
+
+def _deep_getattr(obj, name):
+    for n in name.split('.'):
+        obj = getattr(obj, n)
+    return obj
 
 class _ConfigWrapper(object):
     """
@@ -40,18 +73,23 @@ class _ConfigWrapper(object):
 
     """
 
-    def __init__(self, config, section, timestamp):
+    def __init__(self, classname, config, timestamp):
 
         # Get description info.
         # Get Python class and create temporary instance.
         for option in _CONFIG_DEFAULTS:
-            setattr(self, option, config.get(section, option))
+            setattr(self, _CFG_MAP.get(option, option), config.get('AnalysisServer', option))
 
         self.num_procs = int(self.num_procs)
 
-        self.args = [a.strip() for a in self.args.split() if a.strip()]
+        self.args = _str2list(self.args)
+        self.in_var_patterns = _str2list(self.in_var_patterns)
+        self.out_var_patterns = _str2list(self.out_var_patterns)
+        self.in_attrs = _str2list(self.in_attrs)
+        self.out_attrs = _str2list(self.out_attrs)
+        self.methods = _str2list(self.methods)
 
-        p, instance = _setup_obj(section, 'comp', self.filename, args=self.args)
+        instance = _setup_obj(classname, 'comp', self.filename, args=self.args)
 
         # Check for optional diectory path.
         if self.directory:
@@ -59,7 +97,7 @@ class _ConfigWrapper(object):
                 raise ValueError('directory %r must be a subdirectory'
                                  % self.directory)
 
-        self.section = section
+        self.classname = classname
 
         # Timestamp from config file timestamp
         self.timestamp = timestamp
@@ -72,22 +110,30 @@ class _ConfigWrapper(object):
                 self.description = instance.__doc__
 
         # Get properties.
-        self.inputs = self._setup_mapping(instance, 'in')
-        self.outputs = self._setup_mapping(instance, 'out')
+        self.inputs = self._setup_mapping(instance, 'invar')
+        self.outputs = self._setup_mapping(instance, 'outvar')
+        self.in_attrs = self._setup_mapping(instance, 'inattr')
+        self.out_attrs = self._setup_mapping(instance, 'outattr')
+
+        # overlapping glob patterns result in outputs
+        for name in self.out_attrs:
+            if name in self.in_attrs:
+                del self.in_attrs
+
         self.properties = {}
         self.properties.update(self.inputs)
         self.properties.update(self.outputs)
+        self.properties.update(self.in_attrs)
+        self.properties.update(self.out_attrs)
 
         # Get methods.
+        methods = self.methods
         self.methods = {}
-        for name, meth in sorted(getmembers(instance, ismethod)):
-            if name.startswith('_'):
-                continue
-
+        for name in methods:
             logging.debug('    register %s()', name)
             self.methods[name] = name
 
-        p.cleanup()
+        instance.cleanup()
         if hasattr(instance, 'pre_delete'):
             instance.pre_delete()
 
@@ -95,21 +141,51 @@ class _ConfigWrapper(object):
         """
         Return dictionary mapping external paths to internal paths.
 
-        instance: Component
-            Temporary wrapped instance to interrogate.
+        instance: Problem
+            Temporary wrapped Problem to interrogate.
 
-        iotype: string
-            'in' or 'out'.
-
+        iotype: str
+            String indicating type [invar, outvar, inattr, outattr]
         """
-        if iotype == 'in':
-            items = iteritems(instance.params)
-        else:
-            items = iteritems(instance.unknowns)
-
         mapping = {}
-        for name, meta in sorted(items, key=lambda x: x[0]):
-            val = meta['val']
+
+        if iotype in ('inattr', 'outattr'):
+            attrs = self.in_attrs if iotype == 'inattr' else self.out_attrs
+
+            for attr in attrs:
+                try:
+                    val = _deep_getattr(instance, attr)
+                except AttributeError as exc:
+                    raise AttributeError("Couldn't find '%s' in '%s': %s" % (attr, instance.pathname,str(exc)))
+                wrapper_class = _find_var_wrapper(val)
+                if wrapper_class is None:
+                    logging.warning("%s", val)
+                    logging.warning('%r not a supported type: %r',
+                                   attr, type(val).__name__)
+                    continue
+                mapping[attr] = attr
+            return mapping
+
+        to_prom = instance.root._sysdata.to_prom_name
+
+        if iotype == 'invar':
+            pdict = instance.root._params_dict
+            seen = set()
+            items = []
+            for k, m in chain(iteritems(pdict), iteritems(instance.root._unknowns_dict)):
+                prom = to_prom[k]
+                if prom not in seen:
+                    seen.add(prom)
+                    items.append((prom, m['val']))
+
+            patterns = self.in_var_patterns
+        elif iotype == 'outvar':
+            items = [(to_prom[k],m['val']) for k,m in iteritems(instance.root._unknowns_dict)]
+            patterns = self.out_var_patterns
+        else:
+            raise TypeError("bad iotype (%s). Should be one of [invar, outvar, inattr, outattr]" % iotype)
+
+        for name, val in sorted(items, key=lambda x: x[0]):
             # Only register if it's a supported type.
             wrapper_class = _find_var_wrapper(val)
             if wrapper_class is None:
@@ -117,8 +193,9 @@ class _ConfigWrapper(object):
                 logging.warning('%r not a supported type: %r',
                                name, type(val).__name__)
                 continue
-            logging.debug('    register %s %r %r',
-                         type(val).__name__, name, iotype)
-            mapping[name.replace(':', '.')] = name
+
+            m = _get_match(name, patterns)
+            if m is not None:
+                mapping[m] = name
 
         return mapping

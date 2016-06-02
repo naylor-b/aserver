@@ -2,6 +2,7 @@
 import base64
 import cStringIO
 import gzip
+import logging
 import mimetypes
 from multiprocessing.managers import RemoteError
 
@@ -66,7 +67,7 @@ class FileWrapper(VarWrapper):
         path: string
             External reference to property.
         """
-        if attr == 'value':
+        if attr == self._name or attr == 'value':
             file_ref = self._sysproxy.get(self._name)
             if file_ref is None:
                 return ''
@@ -175,9 +176,7 @@ class FileWrapper(VarWrapper):
         gzipped: bool
             If True, file data is gzipped and then base64 encoded.
         """
-        if attr == 'value':
-            if self._io != 'input':
-                raise RuntimeError('cannot set output <%s>.' % path)
+        if attr == self._name or attr == 'value':
             file_ref = self._sysproxy.get(self._name)
             filename = file_ref._abspath()
 
