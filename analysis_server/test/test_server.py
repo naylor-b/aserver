@@ -17,7 +17,6 @@ from analysis_server.server import start_server, stop_server
 from analysis_server.client import Client
 
 STARTDIR = os.getcwd()
-OPENMDAO_TMPDIR = os.environ.get('OPENMDAO_TMPDIR')
 KEEPDIRS = os.environ.get('OPENMDAO_KEEPDIRS', False)
 
 class TestCase(unittest.TestCase):
@@ -27,10 +26,7 @@ class TestCase(unittest.TestCase):
         logging.info("---------------- Starting test %s" % self.id())
 
         self.testdir = os.path.dirname(os.path.abspath(__file__))
-        if OPENMDAO_TMPDIR:
-            self.tempdir = os.path.join(OPENMDAO_TMPDIR, self.id().split('.')[-1])
-        else:
-            self.tempdir = tempfile.mkdtemp(prefix=self.id().split('.')[-1]+'_')
+        self.tempdir = tempfile.mkdtemp(prefix=self.id().split('.')[-1]+'_')
 
         os.makedirs(os.path.join(self.tempdir, 'd1'))
         os.makedirs(os.path.join(self.tempdir, 'd2/d3'))
@@ -55,7 +51,7 @@ class TestCase(unittest.TestCase):
             stop_server(self.server)
         finally:
             os.chdir(STARTDIR)
-            if not KEEPDIRS and not OPENMDAO_TMPDIR:
+            if not KEEPDIRS:
                 try:
                     shutil.rmtree(self.tempdir)
                 except OSError:

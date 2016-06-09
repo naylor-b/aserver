@@ -89,13 +89,17 @@ class ComponentWrapper(object):
         except KeyError:
             # Determine internal path to variable.
             ext_attr = None
+            logging.info("properties: %s" % self._cfg.properties.keys())
+            logging.info("ext_path: %s" % ext_path)
             if ext_path in self._cfg.properties:
                 int_path = self._cfg.properties[ext_path]
                 epath = ext_path
             else:
-                epath, _, ext_attr = ext_path.rpartition('.')
+                epath, _, ext_attr = ext_path.partition('.')
+                logging.info("ext_attr: %s" % ext_attr)
                 if ext_attr in self._cfg.properties:
                     int_path = self._cfg.properties[ext_attr]
+                    logging.info("int_path: %s" % int_path)
                 else:
                     raise RuntimeError('no such property <%s>.' % ext_path)
             try:

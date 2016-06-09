@@ -2,6 +2,21 @@
 import numpy
 from analysis_server.varwrapper import VarWrapper, _register
 
+def array2str(value, fmt='%.16g'):
+    """
+    Return a string representation of the given numpy array.
+
+    Args
+    ----
+
+    fmt: str
+        Format string for entries. Default of '%.16g' assumes float
+        entries.
+    """
+    return 'bounds[%s] {%s}' % (
+             ', '.join(['%d' % dim for dim in value.shape]),
+             ', '.join([fmt % val for val in value.flat]))
+
 class ArrayBase(VarWrapper):
     """
     Base for wrappers providing double[], long[], or String[] interface.

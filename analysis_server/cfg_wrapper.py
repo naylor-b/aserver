@@ -23,7 +23,6 @@ _CONFIG_DEFAULTS = {
     'help_url': '',
     'keywords': '',
     'requirements': '',
-    'num_procs': '1',
     'args': '',
     'directory': None,
     'filename': None,
@@ -79,8 +78,6 @@ class _ConfigWrapper(object):
         # Get Python class and create temporary instance.
         for option in _CONFIG_DEFAULTS:
             setattr(self, _CFG_MAP.get(option, option), config.get('AnalysisServer', option))
-
-        self.num_procs = int(self.num_procs)
 
         self.args = _str2list(self.args)
         self.in_var_patterns = _str2list(self.in_var_patterns)

@@ -1204,10 +1204,7 @@ Available Commands:
         with self.server.dir_lock:
             manager = SysManager()
             manager.start()
-            if MPI and cfg.num_procs > 1:
-                proxy = manager.DynMPIProblemProxy()
-            else:
-                proxy = manager.ProblemProxy()
+            proxy = manager.ProblemProxy()
             proxy.init(classname, name, cfg.filename, directory=directory)
 
         # Create wrapper for component.
