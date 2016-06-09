@@ -9,10 +9,9 @@ import numpy
 
 
 class TestParDOEProblem(Problem):
-    def __init__(self, load_balance=False):
+    def __init__(self):
         super(TestParDOEProblem, self).__init__()
-        self.driver = driver = ArrayCaseDriver(num_par_doe=4,
-                                               load_balance=load_balance)
+        self.driver = driver = ArrayCaseDriver(num_par_doe=4)
 
         root = self.root = Group()
         root.add('indep_var', IndepVarComp([('a', 0.5),('b',0.75),('c',0.9)]))
@@ -32,10 +31,3 @@ class TestParDOEProblem(Problem):
 
         driver.add_response(driver._desvars)
         driver.add_response(['comp.x', 'comp.y', 'comp.z'])
-
-
-
-class TestParDOEProblemLB(TestParDOEProblem):
-    """Load balanced version of TestParDOEProblem"""
-    def __init__(self):
-        super(TestParDOEProblemLB, self).__init__(load_balance=True)

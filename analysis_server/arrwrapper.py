@@ -1,4 +1,5 @@
 
+import logging
 import numpy
 from analysis_server.varwrapper import VarWrapper, _register
 
@@ -16,6 +17,24 @@ def array2str(value, fmt='%.16g'):
     return 'bounds[%s] {%s}' % (
              ', '.join(['%d' % dim for dim in value.shape]),
              ', '.join([fmt % val for val in value.flat]))
+
+def str2array(s, dtype=float):
+    """
+    Args
+    ----
+    s : str
+        A a string of the form 'bounds[2,3] {1.0,2.0,3.0,4.0,5.0,6.0}'.
+
+    Returns
+    -------
+    A numpy array.
+
+    """
+    shape = tuple(int(v) for v in s.split(']', 1)[0].split('[',1)[1].split(','))
+    vals = [dtype(v) for v in s.split('{',1)[1].split('}',1)[0].split(',')]
+    logging.info("shape: %s" % str(shape))
+    logging.info("vals: %s" % vals)
+    return numpy.array(vals, dtype=dtype).reshape(shape)
 
 class ArrayBase(VarWrapper):
     """
