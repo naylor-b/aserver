@@ -42,14 +42,12 @@ class ProblemProxy(object):
             #self._logger.info("returning prob[%s] = %s" % (name,ret))
             return ret
         except:
-            #self._logger.info("GETTING attr: %s" % name)
             obj = self.problem
             for n in name.split('.'):
                 obj = getattr(obj, n)
             return obj
 
     def invoke(self, name):
-        #self._logger.info("INVOKING: %s" % name)
         obj = self.problem
         try:
             for n in name.split('.'):
@@ -126,7 +124,7 @@ class ProblemProxy(object):
         return meta.get('desc', '')
 
     def get_metadata(self, name):
-        #logging.info("get_metadata(%s)" % name)
+        #self._logger.info("get_metadata(%s)" % name)
         if name in self.system.unknowns:
             return self.system.unknowns._dat[name].meta
         else:
@@ -168,7 +166,7 @@ def _setup_obj(classname, instname, filename=None, directory='', args=()):
             else:
                 dirname = os.getcwd()
 
-    logging.info('    prepending %r to sys.path', dirname)
+    logging.debug('    prepending %r to sys.path', dirname)
     sys.path.insert(0, dirname)
     try:
         __import__(modname)

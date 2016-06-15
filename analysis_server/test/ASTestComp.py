@@ -7,7 +7,7 @@ from six import iteritems
 
 from analysis_server.mixin import ASMixin
 
-from openmdao.api import Problem, Group, Component, FileRef
+from openmdao.api import Problem, Group, Component, FileRef, ExecComp
 
 class VariableTree(object):
     """A class to make it easier to port over old vartrees
@@ -257,6 +257,13 @@ class TestCompProblem(Problem):
         self.root = Group()
         comp = self.root.add('comp', TestComponent(), promotes=['*'])
         comp._init_params_dict['in_file']['val'].fname = 'TestCompProblem.cfg'
+
+
+class ExecCompProblem(Problem):
+    def __init__(self, args):
+        super(ExecCompProblem, self).__init__()
+        self.root = Group()
+        self.root.add('comp', ExecComp(args), promotes=['*'])
 
 
 if __name__ == '__main__':
