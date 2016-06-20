@@ -54,7 +54,6 @@ from openmdao.api import Component, Group, Problem
 
 from openmdao.util.shell_proc import ShellProc, STDOUT
 from openmdao.util.file_util import DirContext
-import openmdao.util.log
 
 from analysis_server.stream  import Stream
 from analysis_server.wrkpool import WorkerPool
@@ -64,7 +63,6 @@ from analysis_server.cfg_wrapper import _ConfigWrapper, _CONFIG_DEFAULTS
 from analysis_server.compwrapper import ComponentWrapper
 from analysis_server.monitor import Heartbeat
 
-# from analysis_server.filexfer import filexfer
 from analysis_server.proxy import ProblemProxy, SysManager
 
 try:

@@ -32,8 +32,6 @@ if sys.platform == 'win32':  #pragma no cover
 else:
     HAVE_PYWIN32 = False
 
-import openmdao.util.log
-
 # Cache of client key pairs indexed by user.
 _KEY_CACHE = {}
 _KEY_CACHE_LOCK = threading.Lock()
