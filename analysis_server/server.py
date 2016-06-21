@@ -1206,8 +1206,8 @@ Available Commands:
             self._logger.warning("Couldn't find component %s" % args[0])
             return
 
-        classname = args[0]
-        name = args[1]
+        classname = args[0].strip('"')
+        name = args[1].strip('"')
 
         if name in self._instance_map:
             self._send_error('Name already in use: "%s"' % name)
