@@ -702,6 +702,24 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
 
         self._send_reply('Use at your own risk!')
 
+    def _get_queues(self, args):
+        """
+        Gets queues for the published component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getQueues <category/component> [full]')
+            return
+
+        comp = self._get_component(args[0])
+        if comp is None:
+            return
+
+        self._send_reply('')  # Queues are a CenterLink thing.
+
     def _get_status(self, args):
         """
         Lists the run status of all component instances.
@@ -1253,7 +1271,7 @@ Available Commands:
     # _COMMANDS['getIcon2'] = _get_icon2
     _COMMANDS['getIcon'] = _get_icon
     _COMMANDS['getLicense'] = _get_license
-    # _COMMANDS['getQueues'] = _get_queues
+    _COMMANDS['getQueues'] = _get_queues
     _COMMANDS['getStatus'] = _get_status
     _COMMANDS['getSysInfo'] = _get_sys_info
     _COMMANDS['getVersion'] = _get_version
