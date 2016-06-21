@@ -154,20 +154,20 @@ class Client(object):
         """ Return True if direct transfers are supported by the server. """
         return self._send_recv('getDirectTransfer') == 'true'
 
-#     def get_hierarchy(self, path, gzipped=False):
-#         """
-#         Return all interface variable information for `path` as XML.
-#
-#         path: string
-#             Path to component instance.
-#
-#         gzipped: bool
-#             If True, returned string is in gzip form.
-#         """
-#         gzipped = ' gzipData' if gzipped else ''
-#         reply = self._send_recv('getHierarchy %s%s' % (path, gzipped))
-# # TODO: Pythonic return value.
-#         return reply
+    def get_hierarchy(self, path, gzipped=False):
+        """
+        Return all interface variable information for `path` as XML.
+
+        path: string
+            Path to component instance.
+
+        gzipped: bool
+            If True, returned string is in gzip form.
+        """
+        gzipped = ' gzipData' if gzipped else ''
+        reply = self._send_recv('getHierarchy %s%s' % (path, gzipped))
+# TODO: Pythonic return value.
+        return reply
 
     def get_icon(self, path):
         """

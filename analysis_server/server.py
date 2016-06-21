@@ -644,31 +644,31 @@ Checksum: %s""" % (cfg.version, cfg.author, str(cfg.has_icon).lower(),
 
         self._send_reply('false')
 
-    # def _get_hierarchy(self, args):
-    #     """
-    #     Get hierarchy of values in component.
-    #
-    #     args: list[string]
-    #         Arguments for the command.
-    #     """
-    #     if len(args) < 1 or len(args) > 2:
-    #         self._send_error('invalid syntax. Proper syntax:\n'
-    #                          'getHierarchy <object> [gzipData]')
-    #         return
-    #
-    #     if len(args) == 2:
-    #         if args[1] == 'gzipData':
-    #             gzip = True
-    #         else:
-    #             self._send_error('invalid syntax. Proper syntax:\n'
-    #                              'getHierarchy <object> [gzipData]')
-    #             return
-    #     else:
-    #         gzip = False
-    #
-    #     wrapper, worker = self._get_proxy(args[0])
-    #     if wrapper is not None:
-    #         worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
+    def _get_hierarchy(self, args):
+        """
+        Get hierarchy of values in component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        if len(args) < 1 or len(args) > 2:
+            self._send_error('invalid syntax. Proper syntax:\n'
+                             'getHierarchy <object> [gzipData]')
+            return
+
+        if len(args) == 2:
+            if args[1] == 'gzipData':
+                gzip = True
+            else:
+                self._send_error('invalid syntax. Proper syntax:\n'
+                                 'getHierarchy <object> [gzipData]')
+                return
+        else:
+            gzip = False
+
+        wrapper, worker = self._get_proxy(args[0])
+        if wrapper is not None:
+            worker.put((wrapper.get_hierarchy, (self._req_id, gzip), {}, None))
 
     def _get_icon(self, args):
         """
@@ -877,11 +877,11 @@ Available Commands:
    getByUrl <object.property> <url> (NOT IMPLEMENTED)
    setByUrl <object.property> = <url> (NOT IMPLEMENTED)
    setDictionary <xml dictionary string> (xml accepted, but not used)
+   getHierarchy <object.property>
    deleteRunShare <key> (NOT IMPLEMENTED)
    getBranchesAndTags (NOT IMPLEMENTED)
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
-   # getHierarchy <object.property>
    # setHierarchy <object.property> <xml>
 
     def _invoke(self, args):
@@ -1267,7 +1267,7 @@ Available Commands:
     _COMMANDS['getBranchesAndTags'] = _get_branches
     _COMMANDS['getDirectTransfer'] = _get_direct_transfer
     _COMMANDS['get'] = _get
-    #_COMMANDS['getHierarchy'] = _get_hierarchy
+    _COMMANDS['getHierarchy'] = _get_hierarchy
     # _COMMANDS['getIcon2'] = _get_icon2
     _COMMANDS['getIcon'] = _get_icon
     _COMMANDS['getLicense'] = _get_license

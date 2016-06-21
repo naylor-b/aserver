@@ -147,10 +147,10 @@ class TestCase(unittest.TestCase):
         result = self.client.get_direct_transfer()
         self.assertFalse(result)
 
-    # def test_get_hierarchy(self):
-    #     self.client.start('d2/d3/TestCompProblem', 'comp')
-    #     result = self.client.get_hierarchy('comp')
-    #
+    def test_get_hierarchy(self):
+        self.client.start('d2/d3/TestCompProblem', 'comp')
+        result = self.client.get_hierarchy('comp')
+        # TODO: do some check of the xml vs expected...
 
     def test_get_icon(self):
         try:
@@ -237,7 +237,7 @@ version: 7.0, build: 42968"""
             'getByUrl <object.property> <url> (NOT IMPLEMENTED)',
             'setByUrl <object.property> = <url> (NOT IMPLEMENTED)',
             'setDictionary <xml dictionary string> (xml accepted, but not used)',
-            #'getHierarchy <object.property>',
+            'getHierarchy <object.property>',
             #'setHierarchy <object.property> <xml>',
             'deleteRunShare <key> (NOT IMPLEMENTED)',
             'getBranchesAndTags (NOT IMPLEMENTED)',
