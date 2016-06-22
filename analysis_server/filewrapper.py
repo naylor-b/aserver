@@ -124,7 +124,7 @@ class FileWrapper(VarWrapper):
             file_ref = self._sysproxy.get(self._name)
             if file_ref is not None:
                 try:
-                    with file_ref.open() as inp:
+                    with file_ref.open('r') as inp:
                         data = inp.read()
                 except IOError as exc:
                     self._logger.warning('get %s.value: %r',
