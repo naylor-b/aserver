@@ -83,7 +83,7 @@ class FileWrapper(VarWrapper):
                     return ''
                 else:
                     raise
-            if file_ref.binary:
+            if file_ref.meta.get('binary'):
                 return base64.b64encode(data)
             else:
                 return data.encode('string_escape')
@@ -96,7 +96,7 @@ class FileWrapper(VarWrapper):
             typ = mimetypes.guess_type(file_ref.path, strict=False)[0]
             if typ is not None:
                 return typ
-            elif file_ref.binary:
+            elif file_ref.meta.get('binary'):
                 return 'application/octet-stream'
             else:
                 return 'text/plain'
@@ -136,7 +136,7 @@ class FileWrapper(VarWrapper):
                     else:
                         raise
                 else:
-                    if not file_ref.binary:
+                    if not file_ref.meta.get('binary'):
                         gz_data = cStringIO.StringIO()
                         with gzip.GzipFile(mode='wb', fileobj=gz_data) as gz_file:
                             gz_file.write(data)
