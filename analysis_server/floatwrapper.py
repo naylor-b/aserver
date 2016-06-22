@@ -35,7 +35,7 @@ class FloatWrapper(VarWrapper):
         """
         return '<Variable name="%s" type="double" io="%s" format=""' \
                ' description=%s units="%s">%s</Variable>' \
-               % (self._ext_path, self._io, self._xml_desc(),
+               % (self._ext_name, self._io, self._xml_desc(),
                   self.get('units', self._ext_path),
                   self.get('value', self._ext_path))
 
