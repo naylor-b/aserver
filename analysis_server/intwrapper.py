@@ -35,7 +35,7 @@ class IntWrapper(VarWrapper):
         """
         return '<Variable name="%s" type="long" io="%s" format=""' \
                ' description=%s>%s</Variable>' \
-               % (self._ext_name, self._io, self._xml_desc(),
+               % (self._ext_path, self._io, self._xml_desc(),
                   self.get('value', self._ext_path))
 
     def set(self, attr, path, valstr, gzipped):

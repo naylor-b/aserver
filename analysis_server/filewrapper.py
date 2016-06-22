@@ -156,7 +156,7 @@ class FileWrapper(VarWrapper):
 
         return '<Variable name="%s" type="file" io="%s" description=%s' \
                ' isBinary="%s" fileName="%s"%s>%s</Variable>' \
-               % (self._ext_name, self._io, self._xml_desc(),
+               % (self._ext_path, self._io, self._xml_desc(),
                   self.get('isBinary', self._ext_path),
                   filename, zipped, data)
 

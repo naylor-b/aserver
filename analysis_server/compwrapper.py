@@ -193,12 +193,12 @@ class ComponentWrapper(object):
             self._send_exc(traceback.format_exc(), req_id)
 
     def _pre_xml(self, lines, gzipped, name, node):
-        if node.children: # it's a Group
-            if name:
-                lines.append('<Group name="%s">' % name.split('.')[-1])
-            else:
-                lines.append('<Group>')
-        else:
+        if not node.children:
+        #     if name:
+        #         lines.append('<Group name="%s">' % name.split('.')[-1])
+        #     else:
+        #         lines.append('<Group>')
+        # else:
             vwrapper, attr = self._get_var_wrapper(name)
             try:
                 lines.append(vwrapper.get_as_xml(gzipped))
@@ -206,8 +206,9 @@ class ComponentWrapper(object):
                 raise type(exc)("Can't get %r: %s %s" % (name, vwrapper,exc))
 
     def _post_xml(self, lines, gzipped, name, node):
-        if node.children:
-            lines.append('</Group>')
+        # if node.children:
+        #     lines.append('</Group>')
+        pass
 
     def get_hierarchy(self, req_id, gzipped):
         """

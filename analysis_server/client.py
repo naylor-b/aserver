@@ -423,18 +423,18 @@ class Client(object):
         """
         return self._send_recv('set %s = %s' % (path, valstr))
 
-    # def set_hierarchy(self, path, xml):
-    #     """
-    #     Set multiple variable values from `xml` data.
-    #
-    #     path:
-    #         Path to component instance.
-    #
-    #     xml: string
-    #         XML describing values to be set.
-    #     """
-    #     return self._send_recv('setHierarchy %s %s' % (path, xml))
-    #
+    def set_hierarchy(self, path, xml):
+        """
+        Set multiple variable values from `xml` data.
+
+        path:
+            Path to component instance.
+
+        xml: string
+            XML describing values to be set.
+        """
+        return self._send_recv('setHierarchy %s %s' % (path, xml))
+
     def set_mode_raw(self):
         """ Sets the connection into 'raw' mode. """
         return self._send_recv('setMode raw', raw=True)
