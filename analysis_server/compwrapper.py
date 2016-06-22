@@ -203,7 +203,7 @@ class ComponentWrapper(object):
             try:
                 lines.append(vwrapper.get_as_xml(gzipped))
             except Exception as exc:
-                raise type(exc)("Can't get %r: %s %s" % (path, vwrapper,exc))
+                raise type(exc)("Can't get %r: %s %s" % (name, vwrapper,exc))
 
     def _post_xml(self, lines, gzipped, name, node):
         if node.children:
