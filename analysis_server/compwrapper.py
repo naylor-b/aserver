@@ -7,6 +7,7 @@ import sys
 import time
 import logging
 import traceback
+from functools import partial
 
 import xml.etree.cElementTree as ElementTree
 from xml.sax.saxutils import escape
@@ -31,6 +32,32 @@ import analysis_server.arrwrapper
 import analysis_server.objwrapper
 import analysis_server.listwrapper
 from analysis_server.filewrapper import FileWrapper
+
+
+class TreeNode(object):
+    def __init__(self):
+        self.children = {}
+
+    def add_child(self, parts):
+        if parts[0] not in self.children:
+            self.children[parts[0]] = TreeNode()
+
+        if len(parts) > 1:
+            self.children[parts[0]].add_child(parts[1:])
+
+    def visit(self, prenode, postnode, name=''):
+        prenode(name, self)
+        for cname, node in sorted(self.children.items()):
+            path = '.'.join((name, cname)) if name else cname
+            node.visit(prenode, postnode, path)
+        postnode(name, self)
+
+def create_tree(names):
+    root = TreeNode()
+    for name in names:
+        root.add_child(name.split('.'))
+    return root
+
 
 class ComponentWrapper(object):
     """
@@ -89,17 +116,13 @@ class ComponentWrapper(object):
         except KeyError:
             # Determine internal path to variable.
             ext_attr = None
-            logging.info("properties: %s" % self._cfg.properties.keys())
-            logging.info("ext_path: %s" % ext_path)
             if ext_path in self._cfg.properties:
                 int_path = self._cfg.properties[ext_path]
                 epath = ext_path
             else:
                 epath, _, ext_attr = ext_path.partition('.')
-                logging.info("ext_attr: %s" % ext_attr)
                 if ext_attr in self._cfg.properties:
                     int_path = self._cfg.properties[ext_attr]
-                    logging.info("int_path: %s" % int_path)
                 else:
                     raise RuntimeError('no such property <%s>.' % ext_path)
             try:
@@ -169,6 +192,23 @@ class ComponentWrapper(object):
         except Exception:
             self._send_exc(traceback.format_exc(), req_id)
 
+    def _pre_xml(self, lines, gzipped, name, node):
+        if node.children: # it's a Group
+            if name:
+                lines.append('<Group name="%s">' % name.split('.')[-1])
+            else:
+                lines.append('<Group>')
+        else:
+            vwrapper, attr = self._get_var_wrapper(name)
+            try:
+                lines.append(vwrapper.get_as_xml(gzipped))
+            except Exception as exc:
+                raise type(exc)("Can't get %r: %s %s" % (path, vwrapper,exc))
+
+    def _post_xml(self, lines, gzipped, name, node):
+        if node.children:
+            lines.append('</Group>')
+
     def get_hierarchy(self, req_id, gzipped):
         """
         Return all inputs & outputs as XML.
@@ -183,26 +223,9 @@ class ComponentWrapper(object):
             group = ''
             lines = []
             lines.append("<?xml version='1.0' encoding='utf-8'?>")
-            lines.append('<Group>')
-            for path in sorted(self._cfg.properties.keys()):
-                vwrapper, attr = self._get_var_wrapper(path)
-                prefix, _, name = path.rpartition('.')
-                if prefix != group:
-                    while not prefix.startswith(group):  # Exit subgroups.
-                        lines.append('</Group>')
-                        group, _, name = group.rpartition('.')
-                    name, _, rest = prefix.partition('.')
-                    if name:
-                        lines.append('<Group name="%s">' % name)
-                    while rest:  # Enter subgroups.
-                        name, _, rest = rest.partition('.')
-                        lines.append('<Group name="%s">' % name)
-                    group = prefix
-                try:
-                    lines.append(vwrapper.get_as_xml(gzipped))
-                except Exception as exc:
-                    raise type(exc)("Can't get %r: %s %s" % (path, vwrapper,exc))
-            lines.append('</Group>')
+            tree = create_tree(self._cfg.properties)
+            tree.visit(partial(self._pre_xml, lines, gzipped),
+                       partial(self._post_xml, lines, gzipped))
             self._send_reply('\n'.join(lines), req_id)
         except Exception:
             self._send_exc(traceback.format_exc(), req_id)

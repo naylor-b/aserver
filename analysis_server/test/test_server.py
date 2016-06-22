@@ -151,6 +151,7 @@ class TestCase(unittest.TestCase):
         self.client.start('d2/d3/TestCompProblem', 'comp')
         result = self.client.get_hierarchy('comp')
         # TODO: do some check of the xml vs expected...
+        #print(result)
 
     def test_get_icon(self):
         try:
