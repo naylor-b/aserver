@@ -878,11 +878,11 @@ Available Commands:
    setByUrl <object.property> = <url> (NOT IMPLEMENTED)
    setDictionary <xml dictionary string> (xml accepted, but not used)
    getHierarchy <object.property>
+   setHierarchy <object.property> <xml>
    deleteRunShare <key> (NOT IMPLEMENTED)
    getBranchesAndTags (NOT IMPLEMENTED)
    getQueues <category/component> [full] (NOT IMPLEMENTED)
    setRunQueue <object> <connector> <queue> (NOT IMPLEMENTED)""")
-   # setHierarchy <object.property> <xml>
 
     def _invoke(self, args):
         """
@@ -1158,19 +1158,19 @@ Available Commands:
             worker.put((wrapper.set,
                         (lhs, rhs.strip(), self._req_id), {}, None))
 
-    # def _set_hierarchy(self, args):
-    #     """
-    #     Set hierarchy of variable values in component.
-    #
-    #     args: list[string]
-    #         Arguments for the command.
-    #     """
-    #     cmd, _, rest = self._req.partition(' ')
-    #     name, _, xml = rest.partition(' ')
-    #     wrapper, worker = self._get_proxy(name)
-    #     if wrapper is not None:
-    #         worker.put((wrapper.set_hierarchy, (xml, self._req_id), {}, None))
-    #
+    def _set_hierarchy(self, args):
+        """
+        Set hierarchy of variable values in component.
+
+        args: list[string]
+            Arguments for the command.
+        """
+        cmd, _, rest = self._req.partition(' ')
+        name, _, xml = rest.partition(' ')
+        wrapper, worker = self._get_proxy(name)
+        if wrapper is not None:
+            worker.put((wrapper.set_hierarchy, (xml, self._req_id), {}, None))
+
     def _set_mode(self, args):
         """
         Sets the connection into 'raw' mode.
@@ -1308,7 +1308,7 @@ Available Commands:
     _COMMANDS['ps'] = _ps
     _COMMANDS['quit'] = _quit
     # _COMMANDS['setDictionary'] = _set_dictionary
-    #_COMMANDS['setHierarchy'] = _set_hierarchy
+    _COMMANDS['setHierarchy'] = _set_hierarchy
     _COMMANDS['setMode'] = _set_mode
     # _COMMANDS['setRunQueue'] = _set_run_queue
     # _COMMANDS['setServerAuthInfo'] = _set_auth_info

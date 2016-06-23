@@ -8,6 +8,7 @@ import time
 import logging
 import traceback
 from functools import partial
+from cStringIO import StringIO
 
 import xml.etree.cElementTree as ElementTree
 from xml.sax.saxutils import escape
@@ -603,20 +604,29 @@ class ComponentWrapper(object):
             'Raw' mode request identifier.
         """
         try:
-            header, _, xml = xml.partition('\n')
-            root = ElementTree.fromstring(xml)
-            for var in root.findall('Variable'):
-                valstr = var.text or ''
-                if var.get('gzipped', 'false') == 'true':
-                    gzipped = True
-                else:
-                    gzipped = False
-                try:
-                    self._set(var.attrib['name'], valstr, gzipped)
-                except Exception as exc:
-                    self._logger.exception("Can't set %r", var.attrib['name'])
-                    raise type(exc)("Can't set %r from %r: %s"
-                                    % (var.attrib['name'], valstr[:1000], exc))
+            #header, _, xml = xml.partition('\n')
+            logging.info("XML:\n%s" % xml)
+            strm = StringIO()
+            strm.write(xml)
+            strm.seek(0)
+            tree = ElementTree.ElementTree()
+            root = tree.parse(strm)
+            #root = ElementTree.fromstring(xml)
+            # for var in root.findall('Variable'):
+            #     valstr = var.text or ''
+            #     if var.get('gzipped', 'false') == 'true':
+            #         gzipped = True
+            #     else:
+            #         gzipped = False
+            #     try:
+            #         self._set(var.attrib['name'], valstr, gzipped)
+            #     except Exception as exc:
+            #         self._logger.exception("Can't set %r", var.attrib['name'])
+            #         raise type(exc)("Can't set %r from %r: %s"
+            #                         % (var.attrib['name'], valstr[:1000], exc))
+            for elem in tree.iter(tag='Variable'):
+                path = tree.getpath(elem)
+                logging.info("PATH: %s" % path)
             self._send_reply('values set', req_id)
         except Exception:
             self._send_exc(traceback.format_exc(), req_id)

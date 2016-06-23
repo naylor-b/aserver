@@ -397,14 +397,14 @@ methods: comp.reinitialize
     def test_set_hierarchy(self):
         # Grab value of obj_input (big XML string).
         reply = self.client.start('d2/d3/TestCompProblem', 'comp')
-        reply = self.client.get('comp.obj_input')
-        obj_input = reply[:-3]
+        # reply = self.client.get('comp.obj_input')
+        # obj_input = reply[:-3]
+#<Variable name="obj_input">%s</Variable>
 
         xml = """\
-<?xml version='1.0' encoding='utf-8'?>
-<Group>
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html>
+<root xml:space="preserve" autoDFT="true">
 <Variable name="in_file">test setHierarchy</Variable>
-<Variable name="obj_input">%s</Variable>
 <Variable name="sub_group.b">false</Variable>
 <Variable name="sub_group.f">-0.5</Variable>
 <Variable name="sub_group.f1d">5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9</Variable>
@@ -417,8 +417,7 @@ methods: comp.reinitialize
 <Variable name="sub_group.s">Cruel world :-(</Variable>
 <Variable name="sub_group.se">hot</Variable>
 <Variable name="x">6</Variable>
-<Variable name="y">7</Variable>
-</Group>""" % escape(obj_input)
+<Variable name="y">7</Variable></root>""" # % escape(obj_input)
 
         self.client.set_mode_raw()
         reply = self.client.set_hierarchy('comp', xml)
